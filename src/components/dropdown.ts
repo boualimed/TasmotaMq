@@ -182,6 +182,14 @@ export class SettingsDropdown extends LitElement {
             <div class="dropdown-item-description">Configure cloud sync and real-time updates</div>
           </div>
         </div>
+
+        <div class="dropdown-item" @click="${() => this.handleNavigation('supabase')}">
+          <span class="dropdown-item-icon">🗄️</span>
+          <div class="dropdown-item-content">
+            <div class="dropdown-item-title">Supabase Integration</div>
+            <div class="dropdown-item-description">Store MQTT messages in Postgres and view device history</div>
+          </div>
+        </div>
       </div>
     `;
   }

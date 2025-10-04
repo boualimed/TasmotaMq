@@ -70,7 +70,7 @@ export const supabaseConfigStyles = css`
   }
 
   input:checked + .toggle-slider {
-    background: linear-gradient(135deg, #3ecf8e 0%, #2e8b67 100%);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   }
 
   input:checked + .toggle-slider:before {
@@ -115,9 +115,9 @@ export const supabaseConfigStyles = css`
 
   .config-input:focus {
     outline: none;
-    border-color: #3ecf8e;
+    border-color: #667eea;
     background: white;
-    box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.1);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
   }
 
   .config-input:disabled {
@@ -126,8 +126,8 @@ export const supabaseConfigStyles = css`
   }
 
   .info-box {
-    background: #f0fdf4;
-    border-left: 4px solid #3ecf8e;
+    background: #eff6ff;
+    border-left: 4px solid #667eea;
     padding: 16px;
     border-radius: 8px;
     margin-bottom: 20px;
@@ -135,13 +135,13 @@ export const supabaseConfigStyles = css`
 
   .info-box-title {
     font-weight: 600;
-    color: #166534;
+    color: #4338ca;
     margin-bottom: 8px;
   }
 
   .info-box-content {
     font-size: 0.9rem;
-    color: #166534;
+    color: #4338ca;
     line-height: 1.6;
   }
 
@@ -150,12 +150,23 @@ export const supabaseConfigStyles = css`
     padding-left: 20px;
   }
 
+  .info-box-content a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .info-box-content a:hover {
+    text-decoration: underline;
+  }
+
   .info-box-content code {
-    background: #dcfce7;
+    background: #dbeafe;
     padding: 2px 6px;
     border-radius: 3px;
     font-family: monospace;
     font-size: 0.85rem;
+    color: #4338ca;
   }
 
   .storage-options {
@@ -183,7 +194,7 @@ export const supabaseConfigStyles = css`
   .checkbox {
     width: 18px;
     height: 18px;
-    accent-color: #3ecf8e;
+    accent-color: #667eea;
     cursor: pointer;
   }
 
@@ -206,6 +217,15 @@ export const supabaseConfigStyles = css`
     border: 2px solid #e1e5e9;
     border-radius: 8px;
     font-size: 0.9rem;
+    transition: all 0.3s ease;
+    background: #f8f9fa;
+  }
+
+  .number-input:focus {
+    outline: none;
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
   }
 
   .stats-grid {
@@ -216,11 +236,12 @@ export const supabaseConfigStyles = css`
   }
 
   .stat-card {
-    background: linear-gradient(135deg, #3ecf8e 0%, #2e8b67 100%);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     padding: 16px;
     border-radius: 10px;
     text-align: center;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
   }
 
   .stat-value {
@@ -244,6 +265,91 @@ export const supabaseConfigStyles = css`
     flex: 1;
     padding: 14px 20px;
     border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+  }
+
+  .btn-secondary {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+  }
+
+  .btn-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3);
+  }
+
+  .btn:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .status-banner {
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .status-banner.success {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 2px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .status-banner.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 2px solid rgba(239, 68, 68, 0.2);
+  }
+
+  .loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @media (max-width: 768px) {
+    .storage-options {
+      grid-template-columns: 1fr;
+    }
+
+    .button-group {
+      flex-direction: column;
+    }
+  }
+
+
     border-radius: 10px;
     font-size: 1rem;
     font-weight: 600;

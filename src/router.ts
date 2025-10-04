@@ -19,6 +19,7 @@ import './components/auth-login.js';
 import './components/device-config.js';
 import './components/dropdown.js';
 import './components/firebase-config.js';
+import './components/supabase-config.js';
 
 const baseURL: string = (import.meta as any).env.BASE_URL;
 
@@ -93,6 +94,14 @@ export const router = new Router({
         lazy(() => import('./components/firebase-config.js')),
       ],
       render: () => html`<firebase-config></firebase-config>`
+    },
+    {
+      path: resolveRouterPath('supabase'),
+      title: 'Supabase Configuration',
+      plugins: [
+        lazy(() => import('./components/supabase-config.js')),
+      ],
+      render: () => html`<supabase-config></supabase-config>`
     },
 
   ]

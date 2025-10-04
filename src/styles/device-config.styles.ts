@@ -575,6 +575,8 @@ export const deviceConfigStyles = css`
     max-height: 200px;
     overflow-y: auto;
     overflow-x: auto;
+    word-wrap: break-word;
+    word-break: break-word;
   }
 
   .log-entry {

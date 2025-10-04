@@ -314,17 +314,17 @@ export class FirebaseConfig extends LitElement {
 
           <div class="config-item">
             <label class="config-label">
-              Database URL (Optional)
+              Database URL <span class="required">*</span>
             </label>
             <input
               type="text"
               class="config-input"
-              placeholder="https://your-app.firebaseio.com"
+              placeholder="https://your-app-default-rtdb.firebaseio.com"
               .value="${this.settings.config.databaseURL || ''}"
               @input="${(e: Event) => this.handleConfigChange(e, 'databaseURL')}"
               ?disabled="${!this.settings.enabled}"
             />
-            <div class="help-text">For Realtime Database</div>
+            <div class="help-text">Required for Realtime Database sync</div>
           </div>
         </div>
 
@@ -367,28 +367,18 @@ export class FirebaseConfig extends LitElement {
             📁 Import from JSON
           </button>
           <button
-            class="btn btn-secondary"
+            class="btn btn-primary"
             @click="${this.handleTestConnection}"
             ?disabled="${!this.settings.enabled || this.isTesting || !this.validateConfig()}"
           >
-            ${this.isTesting ? html`
-              <span class="loading-spinner"></span>
-              Testing...
-            ` : html`
-              🔍 Test Connection
-            `}
+            ${this.isTesting ? html`<span class="loading-spinner"></span>` : '🔍'} Test Connection
           </button>
           <button
             class="btn btn-primary"
             @click="${this.handleSaveSettings}"
-            ?disabled="${this.isLoading || !this.validateConfig()}"
+            ?disabled="${!this.settings.enabled || this.isLoading || !this.validateConfig()}"
           >
-            ${this.isLoading ? html`
-              <span class="loading-spinner"></span>
-              Saving...
-            ` : html`
-              💾 Save Settings
-            `}
+            ${this.isLoading ? html`<span class="loading-spinner"></span>` : '💾'} Save Settings
           </button>
         </div>
       </div>

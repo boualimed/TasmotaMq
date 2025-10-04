@@ -14,7 +14,6 @@ export interface FirebaseSettings {
   config: FirebaseConfig;
   syncDevices: boolean;
   syncMqttSettings: boolean;
-  lastSync?: Date;
 }
 
 export const DEFAULT_FIREBASE_SETTINGS: FirebaseSettings = {
@@ -29,6 +28,16 @@ export const DEFAULT_FIREBASE_SETTINGS: FirebaseSettings = {
     measurementId: '',
     databaseURL: ''
   },
-  syncDevices: true,
-  syncMqttSettings: true
+  syncDevices: false,
+  syncMqttSettings: false
 };
+
+export interface FirebaseTestResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface FirebaseInitResult {
+  success: boolean;
+  error?: string;
+}
