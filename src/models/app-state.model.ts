@@ -7,7 +7,7 @@ export interface AppState {
 }
 
 export interface LogEntry {
-  type: 'info' | 'success' | 'error';
+  type: 'warning' |'info' | 'success' | 'error';
   message: string;
   timestamp: Date;
 }

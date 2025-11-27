@@ -2,9 +2,9 @@ import { LitElement, css } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import './pages/app-home';
-import './components/header';
-import './components/device-config';
-import './components/auth-login';
+import './components/renders/header';
+import './components/app/device-config';
+import './components/features/auth/auth-login';
 import './styles/global.css';
 import { router, resolveRouterPath } from './router';
 

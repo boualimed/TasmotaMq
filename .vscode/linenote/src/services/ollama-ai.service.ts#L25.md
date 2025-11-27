@@ -1,0 +1,1 @@
+deviceType: 'switch' | 'sensor';

@@ -1,19 +1,35 @@
+// firebase.service.ts - FIXED VERSION
 import { FirebaseConfig, FirebaseSettings } from '../models/firebase.model';
 import { Device } from '../models/device.model';
 import { MqttSettings } from '../models/mqtt-settings.model';
 
 // Firebase imports will be loaded dynamically
 let firebaseApp: any = null;
-let firebaseAuth: any = null;
+//let firebaseAuth: any = null;
 let firebaseDatabase: any = null;
 
 const FIREBASE_STORAGE_KEY = 'firebaseSettings';
+
+// 🆕 NEW: Interface for MQTT message records
+interface MqttMessageRecord {
+  deviceId: string;
+  deviceName: string;
+  topic: string;
+  payload: any;
+  timestamp: string;
+}
 
 export class FirebaseService {
   private settings: FirebaseSettings | null = null;
   private initialized = false;
   private listeners: Set<(settings: FirebaseSettings) => void> = new Set();
   private syncEnabled = false;
+
+  // 🆕 NEW: Batch processing properties
+  private messageQueue: MqttMessageRecord[] = [];
+  private batchSize = 50; // Flush after 50 messages
+  private batchInterval = 30000; // Flush every 30 seconds
+  private batchTimer: any = null;
 
   constructor() {
     this.loadSettings();
@@ -42,6 +58,11 @@ export class FirebaseService {
 
       this.initialized = true;
       this.syncEnabled = true;
+
+      // 🆕 NEW: Start batch processor if messages should be stored
+      if (this.settings?.storeMqttMessages) {
+        this.startBatchProcessor();
+      }
 
       console.log('Firebase initialized successfully with Realtime Database');
       return { success: true };
@@ -114,6 +135,14 @@ export class FirebaseService {
     this.settings = settings;
     localStorage.setItem(FIREBASE_STORAGE_KEY, JSON.stringify(settings));
     this.syncEnabled = settings.enabled;
+
+    // Start/stop batch processor based on settings
+    if (settings.storeMqttMessages && this.initialized) {
+      this.startBatchProcessor();
+    } else {
+      this.stopBatchProcessor();
+    }
+
     this.notifyListeners();
   }
 
@@ -267,7 +296,7 @@ export class FirebaseService {
     topic: string,
     payload: any
   ): void {
-    if (!this.isEnabled() || !this.settings?.syncDevices) return;
+    if (!this.isEnabled() || !this.settings?.storeMqttMessages) return;
 
     const record: MqttMessageRecord = {
       deviceId,
@@ -319,7 +348,8 @@ export class FirebaseService {
     }
 
     this.batchTimer = setInterval(() => {
-      // Can't flush without userId - messages will be flushed when devices sync
+      // Messages will be flushed when devices sync or manually
+      // This is just a safety net
     }, this.batchInterval);
 
     console.log(`Firebase: Batch processor started (interval: ${this.batchInterval}ms)`);
@@ -374,6 +404,69 @@ export class FirebaseService {
   private notifyListeners(): void {
     if (this.settings) {
       this.listeners.forEach(listener => listener(this.settings!));
+    }
+  }
+
+  /**
+   * 🆕 NEW: Delete all user data from Firebase Realtime Database
+   */
+  async deleteUserData(userId: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.isEnabled() || !firebaseDatabase) {
+      return { success: false, error: 'Firebase not configured or not initialized' };
+    }
+
+    try {
+      // Import Realtime Database methods
+      const { ref, remove } = await import('firebase/database');
+
+      // Delete all user data paths
+      const pathsToDelete = [
+        `users/${userId}/devices`,
+        `users/${userId}/mqttSettings`,
+        `users/${userId}/mqttMessages`,
+        `users/${userId}/logs`,
+        `users/${userId}/history`,
+        `users/${userId}` // Delete the entire user node
+      ];
+
+      // Delete each path
+      for (const path of pathsToDelete) {
+        const dataRef = ref(firebaseDatabase, path);
+        try {
+          await remove(dataRef);
+          console.log(`✅ Firebase: Deleted ${path}`);
+        } catch (error: any) {
+          // If path doesn't exist, that's fine - continue
+          if (error.code !== 'PERMISSION_DENIED') {
+            console.warn(`⚠️ Firebase: Could not delete ${path}:`, error.message);
+          }
+        }
+      }
+
+      console.log(`✅ Firebase: Successfully deleted all data for user ${userId}`);
+      return { success: true };
+    } catch (error: any) {
+      console.error('Firebase deletion failed:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 🆕 NEW: Check if user data exists in Firebase
+   */
+  async userDataExists(userId: string): Promise<boolean> {
+    if (!this.isEnabled() || !firebaseDatabase) {
+      return false;
+    }
+
+    try {
+      const { ref, get } = await import('firebase/database');
+      const userRef = ref(firebaseDatabase, `users/${userId}`);
+      const snapshot = await get(userRef);
+      return snapshot.exists();
+    } catch (error) {
+      console.error('Failed to check user data:', error);
+      return false;
     }
   }
 }

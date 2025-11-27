@@ -31,7 +31,7 @@ CREATE TABLE device_states (
     user_id VARCHAR(255) NOT NULL,
     device_id VARCHAR(255) NOT NULL,
     device_name VARCHAR(255) NOT NULL,
-    device_type VARCHAR(20) NOT NULL CHECK (device_type IN ('switch', 'sensor')),
+    device_type VARCHAR(20) NOT NULL CHECK (device_type IN ('switch', 'sensor', 'dimmer', 'shutter')),
     is_connected BOOLEAN DEFAULT FALSE,
     is_on BOOLEAN,
     sensor_data JSONB,

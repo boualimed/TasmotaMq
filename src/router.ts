@@ -15,20 +15,24 @@ import { title } from '@thepassle/app-tools/router/plugins/title.js';
 import { authService } from './services/auth.service.js';
 
 import './pages/app-home.js';
-import './components/auth-login.js';
-import './components/device-config.js';
-import './components/dropdown.js';
-import './components/firebase-config.js';
-import './components/supabase-config.js';
-import './components/ai-settings.component.js';
-
+import './components/features/auth/auth-login.js';
+import './components/app/device-config.js';
+import './components/renders/dropdown.js';
+import './components/features/db/firebase-config.js';
+import './components/features/db/supabase-config.js';
+import './components/features/ai/ai-settings.component.js';
+import './components/features/auth/account-deletion.js';
+import './components/features/db/sensor-history.component.js';
+import  './components/renders/subscription-manager.component.js'
+import './components/features/telegram/telegram-config.component.js';
+import './components/features/shield/emergency-controls.component.js';
+import './components/features/shield/shield-dashboard.component.js';
 const baseURL: string = (import.meta as any).env.BASE_URL;
 
 // Auth guard plugin
-const authGuard = () => ({
-  condition(context: any) {
+export const authGuard = () => ({
+  condition() {
     if (!authService.isAuthenticated()) {
-      // Redirect to login if not authenticated
       router.navigate(resolveRouterPath('login'));
       return false;
     }
@@ -43,7 +47,7 @@ export const router = new Router({
       title: 'Home',
       plugins: [
         {
-          condition(context: any) {
+          condition() {
             // Redirect authenticated users to config
             if (authService.isAuthenticated()) {
               router.navigate(resolveRouterPath('device-config'));
@@ -62,7 +66,7 @@ export const router = new Router({
       title: 'Login - Tasmota Controller',
       plugins: [
         {
-          condition(context: any) {
+          condition() {
             // If already authenticated, redirect to config
             if (authService.isAuthenticated()) {
               router.navigate(resolveRouterPath('device-config'));
@@ -70,7 +74,7 @@ export const router = new Router({
             }
             return true;
           }
-        }
+        }as any  // Type assertion to bypass check
       ],
       render: () => html`<auth-login></auth-login>`
     },
@@ -92,37 +96,84 @@ export const router = new Router({
       path: resolveRouterPath('firebase'),
       title: 'Firebase Configuration',
       plugins: [
-        lazy(() => import('./components/firebase-config.js')),
+        lazy(() => import('./components/features/db/firebase-config.js')),
       ],
       render: () => html`<firebase-config></firebase-config>`
-    },
-    {
-      path: resolveRouterPath('supabase'),
-      title: 'Supabase Configuration',
-      plugins: [
-        lazy(() => import('./components/supabase-config.js')),
-      ],
-      render: () => html`<supabase-config></supabase-config>`
     },
 
     {
       path: resolveRouterPath('supabase'),
       title: 'Supabase Configuration',
       plugins: [
-        lazy(() => import('./components/supabase-config.js')),
+        lazy(() => import('./components/features/db/supabase-config.js')),
       ],
       render: () => html`<supabase-config></supabase-config>`
     },
+
+    {
+      path: resolveRouterPath('sensor'),
+      title: 'Supabase Configuration',
+      plugins: [
+        lazy(() => import('./components/features/db/sensor-history.component.js')),
+      ],
+      render: () => html`<sensor-history></sensor-history>`
+    },
+
+
+    {
+      path: resolveRouterPath('deletion'),
+      title: 'Supabase Configuration',
+      plugins: [
+        lazy(() => import('./components/features/auth/account-deletion.js')),
+      ],
+      render: () => html`<account-deletion></account-deletion>`
+    },
+
+    {
+      path: resolveRouterPath('subscription'),
+      title: 'Subscription',
+      plugins: [
+        lazy(() => import('./components/renders/subscription-manager.component')),
+      ],
+      render: () => html`<subscription-manager></subscription-manager>`
+    },
+
+
+
     {
       path: resolveRouterPath('ollama'),
       title: 'Ollama Configuration',
       plugins: [
-        lazy(() => import('./components/ai-settings.component.js')),
+        lazy(() => import('./components/features/ai/ai-settings.component.js')),
       ],
       render: () => html`<ai-settings></ai-settings>`
     },
 
+    {
+      path: resolveRouterPath('telegram'),
+      title: 'telegram Configuration',
+      plugins: [
+        lazy(() => import('./components/features/telegram/telegram-config.component.js')),
+      ],
+      render: () => html`<telegram-config></telegram-config>`
+    },
+    {
+      path: resolveRouterPath('shieldsemrgency'),
+      title: 'emergency Controls',
+      plugins: [
+        lazy(() => import('./components/features/shield/emergency-controls.component.js')),
+      ],
+      render: () => html`<emergency-controls></emergency-controls>`
+    },
 
+    {
+      path: resolveRouterPath('dashboard'),
+      title: 'dashboard',
+      plugins: [
+        lazy(() => import('./components/features/shield/shield-dashboard.component.js')),
+      ],
+      render: () => html`<shield-dashboard></shield-dashboard>`
+    },
   ]
 });
 

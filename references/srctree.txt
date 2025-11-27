@@ -1,0 +1,141 @@
+src
+├── app-index.ts
+├── Complete-Sequence-Diagram.mmd
+├── components
+│   ├── app
+│   │   ├── device-config-logic.ts
+│   │   └── device-config.ts
+│   ├── device-config-logic.ts
+│   ├── features
+│   │   ├── ai
+│   │   │   ├── ai-settings.component.ts
+│   │   │   ├── chat-prompt.component-nosession.ts
+│   │   │   └── chat-prompt.component.ts
+│   │   ├── analytics
+│   │   │   ├── chart-viewer.component.ts
+│   │   │   └── ml-insights-modal.component.ts
+│   │   ├── auth
+│   │   │   ├── account-deletion.ts
+│   │   │   ├── auth-login.ts
+│   │   │   └── deletion-summary.component.ts
+│   │   ├── db
+│   │   │   ├── firebase-config.ts
+│   │   │   ├── sensor-history.component.ts
+│   │   │   └── supabase-config.ts
+│   │   ├── shield
+│   │   │   ├── emergency-controls.component.ts
+│   │   │   └── shield-dashboard.component.ts
+│   │   └── telegram
+│   │       └── telegram-config.component.ts
+│   ├── handlers
+│   │   ├── device-handler.ts
+│   │   ├── mqtt-handler.ts
+│   │   ├── rules-scripts-handler.ts
+│   │   ├── sensor-handler.ts
+│   │   ├── shield-handler.ts
+│   │   ├── shutter-handler.ts
+│   │   ├── storage-handler.ts
+│   │   ├── subscription-handler.ts
+│   │   ├── telegram-handler.ts
+│   │   ├── timer-handler.ts
+│   │   ├── ui-state-handler.ts
+│   │   └── validation-handler.ts
+│   ├── protected-route.ts
+│   ├── renders
+│   │   ├── advanced-relay-render.ts
+│   │   ├── device-card.render.ts
+│   │   ├── device-controls-render.ts
+│   │   ├── device-form.render.ts
+│   │   ├── dropdown.ts
+│   │   ├── header.ts
+│   │   ├── modals-render.ts
+│   │   ├── navigation-render.ts
+│   │   ├── notifications.render.ts
+│   │   ├── rule-builder-modal.component.ts
+│   │   ├── script-builder-modal.component.ts
+│   │   ├── sensor-render.ts
+│   │   ├── subscription-manager.component.ts
+│   │   ├── subscription-widget.component.ts
+│   │   └── timer-manager-modal.component.ts
+│   └── utils
+│       ├── formatters.util.ts
+│       └── validators.util.ts
+├── constants
+│   ├── module-capabilities.ts
+│   ├── mqtt.constants-org.ts
+│   └── mqtt.constants.ts
+├── models
+│   ├── app-state.model.ts
+│   ├── auth.model.ts
+│   ├── chart.model.ts
+│   ├── device.model.ts
+│   ├── firebase.model.ts
+│   ├── mqtt-settings.model.ts
+│   ├── rule.model.ts
+│   ├── script.model.ts
+│   ├── supabase.model.ts
+│   └── telegram.model.ts
+├── pages
+│   ├── app-about
+│   │   ├── about-styles.ts
+│   │   └── app-about.ts
+│   └── app-home.ts
+├── router.ts
+├── services
+│   ├── auth.service.ts
+│   ├── chart.service.ts
+│   ├── chat-command.service.ts
+│   ├── command-acknowledgment.service.ts
+│   ├── command-shield.service.ts
+│   ├── cross-tab-sync.manager.ts
+│   ├── device-control.service.ts
+│   ├── device-monitor.service.ts
+│   ├── device-service.ts
+│   ├── device-validation.service.ts
+│   ├── firebase.service.ts
+│   ├── indexeddb.service.ts
+│   ├── ml-service.ts
+│   ├── module-capabilities.service.ts
+│   ├── mqtt-coordination.service.ts
+│   ├── mqtt-service.ts
+│   ├── notification-service.ts
+│   ├── notification.service.ts
+│   ├── ollama-ai.service.ts
+│   ├── rule.service.ts
+│   ├── script.service.ts
+│   ├── service-manager.ts
+│   ├── storage-service.ts
+│   ├── supabase.service.ts
+│   ├── telegram.service.ts
+│   └── user-session.manager.ts
+├── SQL
+│   └── supabase-schema.sql
+├── styles
+│   ├── account-deletion.ts
+│   ├── ai-settings.styles.ts
+│   ├── auth-login.styles.ts
+│   ├── chart.styles.ts
+│   ├── chat-prompt.styles.ts
+│   ├── device-config.styles.ts
+│   ├── dropdown.styles.ts
+│   ├── firebase-config.styles.ts
+│   ├── global.css
+│   ├── header.styles.ts
+│   ├── indexdb.styles.ts
+│   ├── ml.styles.ts
+│   ├── rule-builder.styles.ts
+│   ├── script-builder.styles.ts
+│   ├── shared-styles.ts
+│   ├── shield-dash.styles.ts
+│   ├── subscription-mg.styles.ts
+│   ├── supabase-config.styles.ts
+│   ├── supabase.styles.ts
+│   ├── telegram-config.styles.ts
+│   ├── theme.styles.ts
+│   └── timer.styles.ts
+└── utils
+    ├── crypto.util.ts
+    ├── feature-guard.util.ts
+    ├── json-parser.util.ts
+    ├── logger.util.ts
+    └── recovery.util.ts

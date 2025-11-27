@@ -1,0 +1,1 @@
+in device-model.ts any new created device must have a unique ID

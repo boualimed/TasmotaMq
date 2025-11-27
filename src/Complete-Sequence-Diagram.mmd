@@ -1,0 +1,500 @@
+sequenceDiagram
+    participant Browser
+    participant HTML
+    participant DeviceConfig as device-config<br/>(UI Component)
+    participant Logic as DeviceConfigLogic<br/>(Business Logic)
+    participant Auth as authService
+    participant Session as userSessionManager
+    participant Storage as storageService
+    participant MQTT as mqttService
+    participant Device as deviceService
+    participant Monitor as deviceMonitorService
+    participant AI as ollamaAIService
+    participant IndexDB as indexedDBService
+    participant Firebase as firebaseService
+    participant Supabase as supabaseService
+
+    %% ============================================
+    %% PHASE 1: APP INITIALIZATION
+    %% ============================================
+
+    Note over Browser,Supabase: PHASE 1: APP INITIALIZATION
+
+    Browser->>HTML: Load index.html
+    HTML->>HTML: Parse HTML & Load Scripts
+    HTML->>DeviceConfig: <device-config> element found
+
+    activate DeviceConfig
+    DeviceConfig->>DeviceConfig: constructor()
+    DeviceConfig->>DeviceConfig: connectedCallback()
+
+    DeviceConfig->>Logic: new DeviceConfigLogic(callback)
+    activate Logic
+
+    DeviceConfig->>Logic: initialize()
+
+    Logic->>Logic: Check isInitialized flag
+    alt Not Initialized
+        Logic->>Auth: getCurrentUser()
+        Auth-->>Logic: User { id, username }
+
+        Logic->>Session: restoreSession()
+        activate Session
+        Session->>Storage: localStorage.getItem('user_session')
+        Storage-->>Session: sessionData | null
+
+        alt Session Exists
+            Session-->>Logic: { devices, mqttSettings, usage }
+            Logic->>Device: setDevices(session.devices)
+            Logic->>Logic: this.devices = devices
+            Logic->>Logic: this.mqttSettings = session.mqttSettings
+        else No Session
+            Logic->>Storage: load(userId)
+            Storage-->>Logic: { devices, mqttSettings }
+            Logic->>Device: setDevices(devices)
+        end
+        deactivate Session
+
+        %% Initialize IndexedDB
+        Logic->>IndexDB: isEnabled()
+        IndexDB-->>Logic: true/false
+
+        alt IndexedDB Enabled
+            Logic->>IndexDB: initialize()
+            IndexDB->>IndexDB: Open 'TasmotaSensorDB'
+            IndexDB-->>Logic: ✅ Ready
+        end
+
+        %% Initialize Supabase
+        alt Supabase Settings Enabled
+            Logic->>Supabase: initialize(config)
+            Supabase->>Supabase: createClient(url, key)
+            Supabase-->>Logic: { success: true }
+        end
+
+        %% Setup Subscriptions
+        Logic->>Logic: setupSubscriptions()
+
+        Logic->>MQTT: onStatusChange(callback)
+        activate MQTT
+        MQTT-->>Logic: unsubscribe function
+
+        Logic->>MQTT: onMessage(callback)
+        MQTT-->>Logic: unsubscribe function
+
+        Logic->>Device: subscribe(callback)
+        Device-->>Logic: unsubscribe function
+
+        Logic->>Monitor: onDeviceStatusChange(callback)
+        Monitor-->>Logic: registered
+
+        Logic->>AI: onConfigChange(callback)
+        AI-->>Logic: unsubscribe function
+
+        %% Attempt Auto-Reconnect
+        Logic->>Logic: attemptAutoReconnect()
+
+        alt wasConnected = true && host exists
+            Logic->>MQTT: getStatus()
+            MQTT-->>Logic: 'disconnected'
+
+            Logic->>Logic: handleConnect()
+            Logic->>MQTT: connect(mqttSettings)
+
+            MQTT->>MQTT: Create MQTT.js client
+            MQTT->>MQTT: client.connect()
+
+            Note over MQTT: WebSocket connecting...<br/>ws://host:port
+
+            MQTT->>MQTT: status = 'connecting'
+            MQTT->>Logic: emit('statusChange', 'connecting')
+            Logic->>DeviceConfig: onStateChange()
+            DeviceConfig->>DeviceConfig: requestUpdate()
+
+            MQTT->>MQTT: client.on('connect')
+            MQTT->>MQTT: status = 'connected'
+            MQTT->>Logic: emit('statusChange', 'connected')
+
+            Logic->>Logic: handleMqttStatusChange('connected')
+            Logic->>Logic: subscribeToAllDevices()
+
+            loop For Each Device
+                Logic->>MQTT: subscribeToDevice(device)
+                MQTT->>MQTT: subscribe(topic, QoS)
+
+                alt Device Has LWT
+                    MQTT->>MQTT: subscribe(lwtTopic)
+                end
+
+                alt Device Has Timers
+                    MQTT->>MQTT: subscribe(resultTopic)
+                    Logic->>Logic: subscribedTopics.add(topic)
+                end
+
+                Note over Logic,MQTT: Stagger: 50-200ms delay
+            end
+
+            Logic->>Logic: mqttSettings.wasConnected = true
+            Logic->>Storage: save(state)
+            Logic->>Session: updateSession()
+
+            Logic->>Logic: autoValidateDevices()
+            loop For Each Device (staggered)
+                Logic->>Logic: handleValidateDevice(deviceId)
+                Logic->>MQTT: publish('cmnd/device/STATUS', '0')
+                Note over MQTT: Device validation request
+            end
+        end
+
+        Logic->>Logic: isInitialized = true
+        deactivate MQTT
+    else Already Initialized
+        Logic-->>DeviceConfig: Early return
+    end
+
+    Logic-->>DeviceConfig: Initialization complete
+    DeviceConfig->>DeviceConfig: Render UI
+    deactivate Logic
+    deactivate DeviceConfig
+
+    %% ============================================
+    %% PHASE 2: MQTT MESSAGE FLOW
+    %% ============================================
+
+    Note over Browser,Supabase: PHASE 2: MQTT MESSAGE FLOW
+
+    MQTT->>MQTT: client.on('message', (topic, payload))
+    activate MQTT
+
+    MQTT->>MQTT: Parse JSON payload
+    MQTT->>Logic: emit('message', {topic, payload})
+    activate Logic
+
+    Logic->>Logic: handleMqttMessage({topic, payload})
+
+    alt STATUS Message (Validation)
+        Logic->>Device: getDevice(deviceId)
+        Device-->>Logic: device
+        Logic->>Logic: deviceValidationService.processStatusMessage()
+        Logic->>Device: updateDevice(id, {validationResult})
+    end
+
+    Logic->>Logic: Loop through all devices
+
+    alt LWT Message
+        Logic->>Logic: isLwtMessage(device, topic)
+        Logic->>Device: updateDevice(id, {isConnected, lwtStatus})
+        Logic->>Monitor: setDeviceStatus(deviceId, isOnline)
+        Logic->>Supabase: recordDeviceHistory()
+        Logic->>AI: feedToAI(device, topic, data)
+    else State/Telemetry Message
+        Logic->>Device: updateDevice(id, {lastSeen})
+        Logic->>Monitor: markDeviceActivity(device)
+    else Switch Message
+        Logic->>Logic: parseSwitchState(payload)
+        Logic->>Device: updateDevice(id, {isOn})
+        Logic->>Supabase: recordDeviceHistory()
+        Logic->>AI: feedToAI()
+    else Sensor Message
+        Logic->>Logic: parseSensorData(payload, jsonPath)
+        Logic->>Device: updateDevice(id, {sensorData})
+        Logic->>IndexDB: storeSensorData(deviceId, data)
+        Logic->>AI: feedToAI()
+        Logic->>Supabase: queueMqttMessage()
+    else Dimmer Message
+        Logic->>Logic: Parse dimmer value & power state
+        Logic->>Device: updateDevice(id, {dimmerValue, isOn})
+        Logic->>AI: feedToAI()
+    else Shutter Message
+        Logic->>Logic: Parse shutter position
+        Logic->>Device: updateDevice(id, {shutterPosition})
+        Logic->>AI: feedToAI()
+    else Timer Status Message
+        Logic->>Logic: handleTimerStatusMessage()
+        Logic->>Device: updateDevice(id, {timerConfig})
+    end
+
+    Logic->>Session: trackUsage('mqttMessagesProcessed', 1)
+    Logic->>Supabase: queueDeviceState(device)
+
+    Logic->>Device: Emit device change event
+    Device->>Logic: emit('devicesChanged', devices)
+
+    Logic->>Logic: handleDeviceChanges(devices)
+    Logic->>Logic: saveState()
+    Logic->>Storage: save({mqttSettings, devices})
+    Logic->>Session: updateSession()
+    Logic->>Firebase: syncDevices(userId, devices)
+    Logic->>DeviceConfig: onStateChange()
+    DeviceConfig->>DeviceConfig: requestUpdate()
+
+    deactivate Logic
+    deactivate MQTT
+
+    %% ============================================
+    %% PHASE 3: USER INTERACTION - Toggle Device
+    %% ============================================
+
+    Note over Browser,Supabase: PHASE 3: USER INTERACTION
+
+    Browser->>DeviceConfig: Click "Toggle Switch"
+    activate DeviceConfig
+
+    DeviceConfig->>Logic: handleToggleDevice(device)
+    activate Logic
+
+    Logic->>Logic: validateToggle()
+    Logic->>MQTT: isConnected()
+    MQTT-->>Logic: true
+
+    Logic->>MQTT: toggleSwitch(device, !isOn)
+    activate MQTT
+
+    MQTT->>MQTT: Build command topic
+    Note over MQTT: cmnd/device/POWER1
+
+    MQTT->>MQTT: client.publish(topic, 'ON'/'OFF')
+    MQTT-->>Logic: Published
+    deactivate MQTT
+
+    Logic->>Device: updateDevice(id, {isOn: !isOn})
+    Device->>Logic: emit('devicesChanged')
+
+    Logic->>DeviceConfig: onStateChange()
+    DeviceConfig->>DeviceConfig: requestUpdate()
+    DeviceConfig->>Browser: UI updated (optimistic)
+
+    deactivate Logic
+    deactivate DeviceConfig
+
+    Note over MQTT: Broker processes command
+    Note over MQTT: Device responds via stat/ topic
+
+    MQTT->>Logic: emit('message', {topic: 'stat/device/RESULT'})
+    Logic->>Device: updateDevice(id, {isOn: actual_state})
+    Logic->>DeviceConfig: onStateChange()
+    DeviceConfig->>Browser: UI updated (confirmed)
+
+    %% ============================================
+    %% PHASE 4: ADD NEW DEVICE
+    %% ============================================
+
+    Note over Browser,Supabase: PHASE 4: ADD NEW DEVICE
+
+    Browser->>DeviceConfig: Fill form & click "Add Device"
+    activate DeviceConfig
+
+    DeviceConfig->>Logic: handleAddDevice()
+    activate Logic
+
+    Logic->>Logic: validateDeviceForm()
+    Logic->>Logic: validateNewDevice()
+
+    Logic->>Session: canPerformAction('add_device')
+    Session-->>Logic: { allowed: true }
+
+    Logic->>Device: createDevice(newDevice)
+    Device->>Device: Generate device ID
+    Device->>Device: Build MQTT topics
+    Device-->>Logic: device object
+
+    Logic->>Device: addDevice(device)
+    Device->>Device: devices.push(device)
+    Device->>Logic: emit('devicesChanged', devices)
+
+    Logic->>Logic: deviceStatusMap.set(deviceId, isConnected)
+
+    alt MQTT Connected
+        Logic->>MQTT: subscribeToDevice(device)
+        activate MQTT
+
+        MQTT->>MQTT: subscribe(commandTopic)
+        MQTT->>MQTT: subscribe(statTopic)
+        MQTT->>MQTT: subscribe(resultTopic)
+
+        alt Device Has LWT
+            MQTT->>MQTT: subscribe(lwtTopic)
+        end
+
+        MQTT-->>Logic: Subscribed
+        deactivate MQTT
+    end
+
+    Logic->>Session: updateSession()
+    Logic->>Storage: save(state)
+    Logic->>Firebase: syncDevices()
+    Logic->>Session: checkAndWarnLimits()
+
+    Logic->>Logic: newDevice = DEFAULT_NEW_DEVICE
+    Logic->>DeviceConfig: onStateChange()
+    DeviceConfig->>Browser: UI updated (form cleared)
+
+    deactivate Logic
+    deactivate DeviceConfig
+
+    %% ============================================
+    %% PHASE 5: SENSOR DATA LOGGING
+    %% ============================================
+
+    Note over Browser,Supabase: PHASE 5: SENSOR DATA LOGGING
+
+    MQTT->>Logic: Sensor message received
+    activate Logic
+
+    Logic->>Logic: handleSensorMessage()
+    Logic->>Logic: parseSensorData()
+    Logic->>Device: updateDevice(id, {sensorData})
+
+    Logic->>IndexDB: storeSensorData(deviceId, name, topic, data)
+    activate IndexDB
+
+    IndexDB->>IndexDB: Open transaction
+    IndexDB->>IndexDB: Add record to 'sensor_data' store
+    IndexDB->>IndexDB: Check maxRecordsPerDevice
+
+    alt Over Limit
+        IndexDB->>IndexDB: Delete oldest records
+    end
+
+    IndexDB-->>Logic: Stored
+    deactivate IndexDB
+
+    Logic->>Supabase: queueMqttMessage()
+    activate Supabase
+
+    Supabase->>Supabase: Add to batch queue
+
+    alt Queue full OR timeout
+        Supabase->>Supabase: Flush batch to database
+        Supabase->>Supabase: INSERT INTO mqtt_messages
+        Supabase-->>Logic: Success
+    end
+    deactivate Supabase
+
+    Logic->>AI: feedToAI(device, topic, data)
+    activate AI
+
+    AI->>AI: processMqttData(context)
+    AI->>AI: Add to data buffer
+
+    alt Analysis interval reached
+        AI->>AI: analyzeDevices()
+        AI->>AI: Call Ollama API
+        AI-->>Logic: Analysis complete
+    end
+    deactivate AI
+
+    Logic->>DeviceConfig: onStateChange()
+    DeviceConfig->>Browser: Sensor value updated in UI
+
+    deactivate Logic
+
+    %% ============================================
+    %% PHASE 6: RULES ENGINE
+    %% ============================================
+
+    Note over Browser,Supabase: PHASE 6: RULES ENGINE
+
+    Browser->>DeviceConfig: Open "Manage Rules"
+    DeviceConfig->>Logic: openRuleModal(deviceId)
+    Logic->>DeviceConfig: showRuleModal = true
+    DeviceConfig->>Browser: <rule-builder-modal> rendered
+
+    Browser->>DeviceConfig: Add rule & save
+    DeviceConfig->>Logic: Rule saved to device.ruleConfig
+    Logic->>Device: updateDevice(id, {ruleConfig})
+
+    MQTT->>Logic: New message arrives
+    Logic->>Logic: handleMqttMessage()
+    Logic->>Device: Device updated
+
+    Device->>Device: Rule engine evaluates
+
+    alt Rule condition met
+        Device->>Device: Queue rule action
+        Device->>Logic: executeRuleAction(device, action)
+
+        Logic->>MQTT: publish(topic, command)
+        Note over Logic,MQTT: Execute rule action<br/>(e.g., turn on another device)
+    end
+
+    %% ============================================
+    %% PHASE 7: DISCONNECT & CLEANUP
+    %% ============================================
+
+    Note over Browser,Supabase: PHASE 7: DISCONNECT & CLEANUP
+
+    Browser->>DeviceConfig: Click "Logout"
+    activate DeviceConfig
+
+    DeviceConfig->>Logic: handleLogout()
+    activate Logic
+
+    Logic->>Storage: save(state)
+    Logic->>Logic: cleanup()
+
+    Logic->>Logic: Unsubscribe all observables
+    Logic->>Monitor: stopAll()
+    Logic->>AI: destroy()
+    Logic->>IndexDB: close()
+
+    Note over Logic: ⚠️ MQTT stays connected!<br/>(Prevents reconnection loop)
+
+    Logic->>Auth: logout()
+    Auth->>Storage: Remove user session
+    Auth->>Browser: Redirect to /login
+
+    deactivate Logic
+
+    Browser->>DeviceConfig: Navigation away
+    DeviceConfig->>DeviceConfig: disconnectedCallback()
+    DeviceConfig->>Logic: cleanup() [called again]
+    Note over DeviceConfig,Logic: Component unmounted<br/>but MQTT persists
+
+    deactivate DeviceConfig
+
+    %% ============================================
+    %% PHASE 8: COMPONENT REMOUNT (THE BUG!)
+    %% ============================================
+
+    Note over Browser,Supabase: PHASE 8: REMOUNT (BUG SCENARIO)
+
+    Browser->>DeviceConfig: Navigate back to device-config
+    activate DeviceConfig
+
+    DeviceConfig->>DeviceConfig: connectedCallback()
+    DeviceConfig->>Logic: new DeviceConfigLogic()
+    activate Logic
+
+    DeviceConfig->>Logic: initialize()
+
+    Logic->>Logic: Check isInitialized
+    Note over Logic: ❌ BUG: Flag was reset<br/>by previous cleanup()
+
+    Logic->>Logic: isInitialized = false
+    Logic->>Logic: Run full initialization AGAIN
+
+    Logic->>Logic: setupSubscriptions()
+    Logic->>MQTT: onStatusChange() [DUPLICATE!]
+    Logic->>MQTT: onMessage() [DUPLICATE!]
+
+    Logic->>Logic: subscribeToAllDevices()
+
+    loop For Each Device
+        Logic->>MQTT: subscribeToDevice()
+        Note over MQTT: ⚠️ DUPLICATE subscription!<br/>Already subscribed
+        MQTT->>MQTT: Topic already in subscriptions
+        MQTT->>MQTT: Message handlers stack up
+    end
+
+    Note over MQTT,Logic: 🔥 PROBLEM:<br/>Multiple handlers for same topic<br/>Message processing duplicated<br/>Broker sees duplicate subscriptions<br/>Connection becomes unstable
+
+    MQTT->>MQTT: Broker rate-limiting kicks in
+    MQTT->>MQTT: Connection drops
+    MQTT->>Logic: emit('statusChange', 'disconnected')
+
+    Logic->>Logic: Auto-reconnect triggered
+    Note over Logic,MQTT: Reconnection loop begins...
+
+    deactivate Logic
+    deactivate DeviceConfig

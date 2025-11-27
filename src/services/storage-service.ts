@@ -1,43 +1,76 @@
-import { AppState } from '../models/app-state.model';
-import { Device } from '../models/device.model';
-import { OllamaConfig } from '../services/ollama-ai.service';
+// storage-service.ts (Updated with Session Support)
 
-const STORAGE_KEY = 'appState';
-const AI_CONFIG_KEY = 'ollama_ai_config';
+import { AppState } from '../models/app-state.model';
+import { userSessionManager } from './user-session.manager';
+
+const STORAGE_KEY_PREFIX = 'tasmota_app_';
 
 export class StorageService {
   /**
-   * Saves application state to storage
+   * Save app state to user session
    */
-  save(state: AppState): void {
+  save(state: AppState, userId: string): void {
     try {
-      const serialized = JSON.stringify(state);
-      localStorage.setItem(STORAGE_KEY, serialized);
+      // 🆕 FIX: Update user session with current state
+      const session = userSessionManager.getCurrentSession();
+      if (session && session.userId === userId) {
+        userSessionManager.updateSession({
+          devices: state.devices,
+          mqttSettings: state.mqttSettings,
+          lastAccess: new Date()
+        });
+        console.log('💾 State saved to session:', state.devices.length, 'devices');
+      }
+
+      // Also save to user-specific localStorage key (backward compatibility)
+      const key = this.getUserStorageKey(userId);
+      localStorage.setItem(key, JSON.stringify(state));
+
+      console.log('💾 State saved for user:', userId);
     } catch (error) {
       console.error('Failed to save state:', error);
     }
   }
 
   /**
-   * Loads application state from storage
+   * Load app state from user session
    */
-  load(): AppState | null {
+  load(userId: string): AppState | null {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
+      // First try to load from user session
+      const session = userSessionManager.getCurrentSession();
 
-      const parsed = JSON.parse(raw);
+      if (session && session.userId === userId) {
+        console.log('✅ Loading state from active session:', session.devices.length, 'devices');
+        return {
+          devices: session.devices,
+          mqttSettings: session.mqttSettings
+        };
+      }
 
-      // Deserialize dates - but DON'T reset connection state
-      if (parsed.devices) {
-        parsed.devices = parsed.devices.map((d: Device) => ({
-          ...d,
-          // Keep the saved connection state instead of resetting
-          lastSeen: d.lastSeen ? new Date(d.lastSeen) : undefined
+      // Fallback to localStorage
+      const key = this.getUserStorageKey(userId);
+      const raw = localStorage.getItem(key);
+
+      if (!raw) {
+        console.log('ℹ️ No saved state found for user:', userId);
+        return null;
+      }
+
+      const state = JSON.parse(raw);
+
+      // 🆕 FIX: Deserialize dates in devices
+      if (state.devices && Array.isArray(state.devices)) {
+        state.devices = state.devices.map((device: any) => ({
+          ...device,
+          lastSeen: device.lastSeen ? new Date(device.lastSeen) : undefined,
+          createdAt: device.createdAt ? new Date(device.createdAt) : undefined,
+          lastValidation: device.lastValidation ? new Date(device.lastValidation) : undefined
         }));
       }
 
-      return parsed;
+      console.log('✅ State loaded from storage for user:', userId, state.devices?.length || 0, 'devices');
+      return state;
     } catch (error) {
       console.error('Failed to load state:', error);
       return null;
@@ -45,57 +78,105 @@ export class StorageService {
   }
 
   /**
-   * Saves AI configuration
+   * Delete all user data (GDPR compliance)
    */
-  saveAIConfig(config: OllamaConfig): void {
+  deleteUserData(userId: string): { success: boolean; deletedItems: string[] } {
+    const deletedItems: string[] = [];
+
     try {
-      const serialized = JSON.stringify(config);
-      localStorage.setItem(AI_CONFIG_KEY, serialized);
+      console.log('🗑️ Starting user data deletion for:', userId);
+
+      // 1. Delete user session
+      userSessionManager.deleteUserSession(userId);
+      deletedItems.push('user_session');
+
+      // 2. Delete user-specific storage
+      const userKey = this.getUserStorageKey(userId);
+      if (localStorage.getItem(userKey)) {
+        localStorage.removeItem(userKey);
+        deletedItems.push(userKey);
+        console.log('✅ Deleted:', userKey);
+      }
+
+      // 3. Delete any user-prefixed keys
+      const allKeys = Object.keys(localStorage);
+      allKeys.forEach(key => {
+        if (key.includes(userId)) {
+          localStorage.removeItem(key);
+          deletedItems.push(key);
+          console.log('✅ Deleted:', key);
+        }
+      });
+
+      console.log('✅ User data deletion complete:', deletedItems);
+      return { success: true, deletedItems };
     } catch (error) {
-      console.error('Failed to save AI config:', error);
+      console.error('❌ Failed to delete user data:', error);
+      return { success: false, deletedItems };
     }
   }
 
   /**
-   * Loads AI configuration
+   * Get storage key for specific user
    */
-  loadAIConfig(): OllamaConfig | null {
+  private getUserStorageKey(userId: string): string {
+    return `${STORAGE_KEY_PREFIX}${userId}`;
+  }
+
+  /**
+   * Export all user data (GDPR compliance)
+   */
+  exportUserData(userId: string): string {
     try {
-      const raw = localStorage.getItem(AI_CONFIG_KEY);
-      if (!raw) return null;
-      return JSON.parse(raw);
+      const session = userSessionManager.getCurrentSession();
+      if (session && session.userId === userId) {
+        return userSessionManager.exportUserData();
+      }
+
+      const state = this.load(userId);
+      return JSON.stringify({ userId, state }, null, 2);
     } catch (error) {
-      console.error('Failed to load AI config:', error);
-      return null;
+      console.error('Failed to export user data:', error);
+      return '';
     }
   }
 
   /**
-   * Clears all stored data
+   * Get storage usage for user
    */
-  clear(): void {
+  getUserStorageSize(userId: string): number {
+    let totalSize = 0;
+
     try {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(AI_CONFIG_KEY);
+      const allKeys = Object.keys(localStorage);
+      allKeys.forEach(key => {
+        if (key.includes(userId)) {
+          const value = localStorage.getItem(key);
+          if (value) {
+            // Approximate size (UTF-16 encoding)
+            totalSize += value.length * 2;
+          }
+        }
+      });
     } catch (error) {
-      console.error('Failed to clear state:', error);
+      console.error('Failed to calculate storage size:', error);
     }
+
+    return totalSize;
   }
 
   /**
-   * Checks if storage is available
+   * Clear all app data (admin/debug)
    */
-  isAvailable(): boolean {
-    try {
-      const test = '__storage_test__';
-      localStorage.setItem(test, test);
-      localStorage.removeItem(test);
-      return true;
-    } catch {
-      return false;
-    }
+  clearAll(): void {
+    const allKeys = Object.keys(localStorage);
+    allKeys.forEach(key => {
+      if (key.startsWith(STORAGE_KEY_PREFIX)) {
+        localStorage.removeItem(key);
+      }
+    });
+    console.log('🗑️ Cleared all app data');
   }
 }
 
-// Singleton instance
 export const storageService = new StorageService();

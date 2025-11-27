@@ -5,7 +5,7 @@ export class Logger {
   private logs: LogEntry[] = [];
   private listeners: Set<(logs: LogEntry[]) => void> = new Set();
 
-  addLog(type: 'info' | 'success' | 'error', message: string): void {
+  addLog(type: 'warning' |'info' | 'success' | 'error', message: string): void {
     this.logs = [...this.logs.slice(-MQTT_CONFIG.MAX_LOGS + 1), {
       type,
       message,

@@ -7,12 +7,12 @@ import {
 } from '../models/supabase.model';
 import { Device } from '../models/device.model';
 import { logger } from '../utils/logger.util';
+import { notificationService } from '../services/notification.service';
+import { userSessionManager, UserSession } from '../services/user-session.manager';
 
 // Supabase client will be loaded dynamically
 let supabaseClient: any = null;
 let currentClientConfig: { url: string; key: string } | null = null;
-
-const SUPABASE_STORAGE_KEY = 'supabaseSettings';
 
 export class SupabaseService {
   private settings: SupabaseSettings | null = null;
@@ -23,9 +23,45 @@ export class SupabaseService {
   private listeners: Set<(settings: SupabaseSettings) => void> = new Set();
   private insertCount = 0;
   private errorCount = 0;
+  private sessionUnsubscribe: (() => void) | null = null;
 
   constructor() {
-    this.loadSettings();
+    // Subscribe to user session changes
+    this.sessionUnsubscribe = userSessionManager.subscribe((session) => {
+      this.handleSessionChange(session);
+    });
+
+    // Try to restore settings from current session
+    const currentSession = userSessionManager.getCurrentSession();
+    if (currentSession?.supabaseSettings) {
+      this.settings = currentSession.supabaseSettings;
+    }
+  }
+
+  /**
+   * Handle user session changes
+   */
+  private handleSessionChange(session: UserSession | null): void {
+    if (!session) {
+      // User logged out - disconnect and cleanup
+      console.log('[Supabase] User logged out, cleaning up...');
+      this.disconnect();
+      return;
+    }
+
+    // Load settings from session
+    if (session.supabaseSettings) {
+      this.settings = session.supabaseSettings;
+
+      // Auto-initialize if enabled
+      if (this.settings.enabled && this.settings.config.url && this.settings.config.anonKey) {
+        console.log('[Supabase] Auto-initializing from session settings...');
+        this.initialize(this.settings.config).catch(error => {
+          logger.addLog('error', `Auto-init failed: ${error.message}`);
+          notificationService.error(`Supabase auto-init failed: ${error.message}`, 5000);
+        });
+      }
+    }
   }
 
   /**
@@ -42,7 +78,6 @@ export class SupabaseService {
     // Clean up old client if it exists
     if (supabaseClient) {
       try {
-        // Remove auth listener if it exists
         supabaseClient.auth?.stopAutoRefresh?.();
         supabaseClient = null;
         currentClientConfig = null;
@@ -56,9 +91,9 @@ export class SupabaseService {
 
     supabaseClient = createClient(config.url, config.anonKey, {
       auth: {
-        persistSession: false, // Disable session persistence to avoid multiple instances
-        autoRefreshToken: false, // Disable auto-refresh
-        detectSessionInUrl: false // Disable URL session detection
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
       }
     });
 
@@ -82,17 +117,20 @@ export class SupabaseService {
         .from('mqtt_messages')
         .select('count', { count: 'exact', head: true });
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = table doesn't exist yet
+      if (error && error.code !== 'PGRST116') {
         throw new Error(error.message);
       }
 
       this.initialized = true;
       this.startBatchProcessor();
+
       logger.addLog('success', 'Supabase initialized successfully');
+      notificationService.success('✅ Supabase connected', 3000);
 
       return { success: true };
     } catch (error: any) {
       logger.addLog('error', `Supabase init failed: ${error.message}`);
+      notificationService.error(`❌ Supabase init failed: ${error.message}`, 5000);
       return { success: false, error: error.message || 'Failed to initialize Supabase' };
     }
   }
@@ -104,20 +142,28 @@ export class SupabaseService {
     try {
       // Validate config first
       if (!config.url || !config.anonKey) {
-        return { success: false, error: 'Missing required configuration fields' };
+        const error = 'Missing required configuration fields';
+        notificationService.error(`❌ ${error}`, 5000);
+        return { success: false, error };
       }
 
       // Validate URL format
       if (!config.url.startsWith('https://') || !config.url.includes('.supabase.co')) {
-        return { success: false, error: 'Invalid Project URL format. Should be https://xxxxx.supabase.co' };
+        const error = 'Invalid Project URL format. Should be https://xxxxx.supabase.co';
+        notificationService.error(`❌ ${error}`, 5000);
+        return { success: false, error };
       }
 
-      // Validate key format (JWT should start with eyJ)
+      // Validate key format
       if (!config.anonKey.startsWith('eyJ')) {
-        return { success: false, error: 'Invalid Anon Key format. Should be a JWT token starting with eyJ' };
+        const error = 'Invalid Anon Key format. Should be a JWT token starting with eyJ';
+        notificationService.error(`❌ ${error}`, 5000);
+        return { success: false, error };
       }
 
-      // Create a test client with minimal options
+      notificationService.info('🔍 Testing Supabase connection...', 2000);
+
+      // Create a test client
       const { createClient } = await import('@supabase/supabase-js');
       const testClient = createClient(config.url, config.anonKey, {
         auth: {
@@ -127,53 +173,62 @@ export class SupabaseService {
         }
       });
 
-      // Try a simple query to test connection
+      // Try a simple query
       const { error } = await testClient
         .from('mqtt_messages')
         .select('count', { count: 'exact', head: true })
         .limit(0);
 
-      // PGRST116 means table doesn't exist - that's OK for test
       if (error && error.code !== 'PGRST116') {
-        // Check for common errors
         if (error.message.includes('JWT')) {
-          return { success: false, error: 'Invalid API key. Please verify your Anon Key from Supabase dashboard.' };
+          throw new Error('Invalid API key. Please verify your Anon Key from Supabase dashboard.');
         } else if (error.message.includes('connect')) {
-          return { success: false, error: 'Cannot connect to Supabase. Check your Project URL.' };
+          throw new Error('Cannot connect to Supabase. Check your Project URL.');
         }
         throw new Error(error.message);
       }
 
+      notificationService.success('✅ Connection test successful!', 3000);
+      logger.addLog('success', 'Supabase connection test passed');
+
       return { success: true };
     } catch (error: any) {
       console.error('Supabase connection test failed:', error);
+      notificationService.error(`❌ Connection failed: ${error.message}`, 5000);
+      logger.addLog('error', `Supabase test failed: ${error.message}`);
       return { success: false, error: error.message || 'Connection test failed' };
     }
   }
 
   /**
-   * Saves settings
+   * Saves settings to user session
    */
   saveSettings(settings: SupabaseSettings): void {
     this.settings = settings;
-    localStorage.setItem(SUPABASE_STORAGE_KEY, JSON.stringify(settings));
+
+    // Save to user session instead of localStorage
+    const session = userSessionManager.getCurrentSession();
+    if (session) {
+      userSessionManager.updateSupabaseSettings(settings);
+      logger.addLog('success', 'Supabase settings saved to user session');
+      notificationService.success('💾 Settings saved', 2000);
+    } else {
+      logger.addLog('warning', 'No active session - settings not persisted');
+      notificationService.warning('⚠️ No active session', 3000);
+    }
+
     this.notifyListeners();
   }
 
   /**
-   * Loads settings
+   * Loads settings from user session
    */
   loadSettings(): SupabaseSettings | null {
-    try {
-      const raw = localStorage.getItem(SUPABASE_STORAGE_KEY);
-      if (!raw) return null;
+    const session = userSessionManager.getCurrentSession();
+    if (!session) return null;
 
-      this.settings = JSON.parse(raw);
-      return this.settings;
-    } catch (error) {
-      console.error('Failed to load Supabase settings:', error);
-      return null;
-    }
+    this.settings = session.supabaseSettings || null;
+    return this.settings;
   }
 
   /**
@@ -191,7 +246,7 @@ export class SupabaseService {
   }
 
   /**
-   * Queues MQTT message for storage (real-time approach)
+   * Queues MQTT message for storage
    */
   queueMqttMessage(
     userId: string,
@@ -200,7 +255,13 @@ export class SupabaseService {
     topic: string,
     payload: any
   ): void {
-    if (!this.isEnabled() || !this.settings?.storeMqttMessages) return;
+    if (!this.isEnabled() || !this.settings?.storeMqttMessages) {
+      console.log('[Supabase] Queueing disabled:', {
+        enabled: this.isEnabled(),
+        storeMqttMessages: this.settings?.storeMqttMessages
+      });
+      return;
+    }
 
     const payloadType = this.getPayloadType(payload);
 
@@ -216,8 +277,15 @@ export class SupabaseService {
 
     this.messageQueue.push(record);
 
+    console.log('[Supabase] Message queued:', {
+      queueSize: this.messageQueue.length,
+      deviceName,
+      topic
+    });
+
     // If batch size reached, flush immediately
     if (this.messageQueue.length >= (this.settings?.batchSize || 50)) {
+      console.log('[Supabase] Batch size reached, flushing...');
       this.flushMessageQueue();
     }
   }
@@ -281,27 +349,38 @@ export class SupabaseService {
    * Flushes message queue to Supabase
    */
   private async flushMessageQueue(): Promise<void> {
-    if (this.messageQueue.length === 0 || !supabaseClient) return;
+    if (this.messageQueue.length === 0 || !supabaseClient) {
+      console.log('[Supabase] Nothing to flush or client not ready');
+      return;
+    }
 
     const batch = this.messageQueue.splice(0, this.settings?.batchSize || 50);
 
+    console.log('[Supabase] Flushing batch:', {
+      batchSize: batch.length,
+      sample: batch[0]
+    });
+
     try {
-      const { error } = await supabaseClient
+      const { data, error } = await supabaseClient
         .from('mqtt_messages')
         .insert(batch);
 
       if (error) {
+        console.error('[Supabase] Insert error:', error);
         this.errorCount++;
         logger.addLog('error', `Failed to insert MQTT messages: ${error.message}`);
-        // Re-queue failed messages (optional, may cause duplicates)
-        // this.messageQueue.unshift(...batch);
+        notificationService.error(`❌ Supabase insert failed: ${error.message}`, 5000);
       } else {
+        console.log('[Supabase] Insert success:', data);
         this.insertCount += batch.length;
         logger.addLog('info', `Inserted ${batch.length} MQTT messages to Supabase`);
       }
     } catch (error: any) {
+      console.error('[Supabase] Catch error:', error);
       this.errorCount++;
       logger.addLog('error', `Batch insert error: ${error.message}`);
+      notificationService.error(`❌ Supabase error: ${error.message}`, 5000);
     }
   }
 
@@ -314,7 +393,6 @@ export class SupabaseService {
     const batch = this.stateQueue.splice(0, this.settings?.batchSize || 50);
 
     try {
-      // Upsert device states (update if exists, insert if new)
       const { error } = await supabaseClient
         .from('device_states')
         .upsert(batch, { onConflict: 'user_id,device_id' });
@@ -322,12 +400,14 @@ export class SupabaseService {
       if (error) {
         this.errorCount++;
         logger.addLog('error', `Failed to update device states: ${error.message}`);
+        notificationService.error(`❌ State update failed: ${error.message}`, 5000);
       } else {
         logger.addLog('info', `Updated ${batch.length} device states in Supabase`);
       }
     } catch (error: any) {
       this.errorCount++;
       logger.addLog('error', `State update error: ${error.message}`);
+      notificationService.error(`❌ State update error: ${error.message}`, 5000);
     }
   }
 
@@ -407,11 +487,13 @@ export class SupabaseService {
       const { data, error } = await query;
 
       if (error) {
+        logger.addLog('error', `Query failed: ${error.message}`);
         return { success: false, error: error.message };
       }
 
       return { success: true, data: data || [] };
     } catch (error: any) {
+      logger.addLog('error', `Query error: ${error.message}`);
       return { success: false, error: error.message };
     }
   }
@@ -438,11 +520,13 @@ export class SupabaseService {
         .limit(limit);
 
       if (error) {
+        logger.addLog('error', `History query failed: ${error.message}`);
         return { success: false, error: error.message };
       }
 
       return { success: true, data: data || [] };
     } catch (error: any) {
+      logger.addLog('error', `History query error: ${error.message}`);
       return { success: false, error: error.message };
     }
   }
@@ -475,8 +559,10 @@ export class SupabaseService {
         .lt('timestamp', cutoffDate.toISOString());
 
       logger.addLog('info', `Cleaned up records older than ${this.settings.retentionDays} days`);
+      notificationService.info(`🧹 Cleanup complete (${this.settings.retentionDays} days retention)`, 3000);
     } catch (error: any) {
       logger.addLog('error', `Cleanup error: ${error.message}`);
+      notificationService.error(`❌ Cleanup error: ${error.message}`, 5000);
     }
   }
 
@@ -508,6 +594,59 @@ export class SupabaseService {
 
     this.initialized = false;
     logger.addLog('info', 'Supabase disconnected');
+    notificationService.info('📊 Supabase disconnected', 2000);
+  }
+
+  /**
+   * Delete all user data from Supabase
+   */
+  async deleteUserData(userId: string): Promise<{ success: boolean; error?: string }> {
+    if (!currentClientConfig || !supabaseClient) {
+      return { success: false, error: 'Supabase not configured' };
+    }
+
+    try {
+      notificationService.info('🗑️ Deleting user data from Supabase...', 3000);
+
+      // Delete from all tables
+      const { error: historyError } = await supabaseClient
+        .from('device_history')
+        .delete()
+        .eq('user_id', userId);
+
+      if (historyError) throw historyError;
+
+      const { error: statesError } = await supabaseClient
+        .from('device_states')
+        .delete()
+        .eq('user_id', userId);
+
+      if (statesError) throw statesError;
+
+      const { error: mqttError } = await supabaseClient
+        .from('mqtt_messages')
+        .delete()
+        .eq('user_id', userId);
+
+      if (mqttError) throw mqttError;
+
+      const { error: devicesError } = await supabaseClient
+        .from('devices')
+        .delete()
+        .eq('user_id', userId);
+
+      if (devicesError) throw devicesError;
+
+      logger.addLog('success', `Deleted all Supabase data for user ${userId}`);
+      notificationService.success('✅ All Supabase data deleted', 3000);
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Supabase deletion failed:', error);
+      logger.addLog('error', `Supabase deletion failed: ${error.message}`);
+      notificationService.error(`❌ Deletion failed: ${error.message}`, 5000);
+      return { success: false, error: error.message };
+    }
   }
 
   /**
@@ -529,6 +668,17 @@ export class SupabaseService {
     if (typeof payload === 'number') return 'number';
     if (typeof payload === 'boolean') return 'boolean';
     return 'string';
+  }
+
+  /**
+   * Cleanup on service destruction
+   */
+  destroy(): void {
+    if (this.sessionUnsubscribe) {
+      this.sessionUnsubscribe();
+      this.sessionUnsubscribe = null;
+    }
+    this.disconnect();
   }
 }
 

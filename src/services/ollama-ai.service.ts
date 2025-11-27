@@ -22,7 +22,7 @@ export const DEFAULT_OLLAMA_CONFIG: OllamaConfig = {
 export interface DeviceContext {
   deviceId: string;
   deviceName: string;
-  deviceType: 'switch' | 'sensor';
+  deviceType: 'switch' | 'sensor'| 'dimmer' | 'shutter';
   topic: string;
   data: any;
   timestamp: Date;
@@ -218,7 +218,7 @@ export class OllamaAIService {
     });
 
     // Analyze each device's data
-    for (const [deviceId, contexts] of deviceGroups) {
+    for (const [, contexts] of deviceGroups) {
       const latestContext = contexts[contexts.length - 1];
       await this.performAnalysis(latestContext);
     }
@@ -245,7 +245,7 @@ export class OllamaAIService {
       logger.addLog('info', `🤖 Analysis completed in ${duration}s`);
 
       if (response) {
-        const analysis = this.parseAIResponse(response, context);
+        const analysis = this.parseAIResponse(response);
         this.handleAnalysisResult(analysis, context);
         return analysis;
       }
@@ -262,10 +262,14 @@ export class OllamaAIService {
   /**
    * Build prompt for Ollama based on device context
    */
-  private buildPrompt(context: DeviceContext): string {
-    const deviceBuffer = this.deviceDataBuffer.get(context.deviceId) || [];
+  /**
+ * Build prompt for Ollama based on device context
+ */
+private buildPrompt(context: DeviceContext): string {
+  const deviceBuffer = this.deviceDataBuffer.get(context.deviceId) || [];
 
-    if (context.deviceType === 'sensor') {
+  switch (context.deviceType) {
+    case 'sensor': {
       const history = deviceBuffer.slice(-5).map(c =>
         `Time: ${c.timestamp.toLocaleTimeString()}, Data: ${JSON.stringify(c.data)}`
       ).join('\n');
@@ -292,17 +296,95 @@ STATUS: [normal/warning/critical]
 ANALYSIS: [your analysis]
 RECOMMENDATION: [your recommendation or "none"]
 PRIORITY: [low/medium/high/critical]`;
-    } else {
-      // Switch device
-      const history = deviceBuffer.slice(-5).map(c =>
-        `Time: ${c.timestamp.toLocaleTimeString()}, State: ${c.data.isOn ? 'ON' : 'OFF'}`
-      ).join('\n');
+    }
+
+    case 'dimmer': {
+      const history = deviceBuffer.slice(-5).map(c => {
+        const brightness = c.data.dimmerValue !== undefined ? c.data.dimmerValue : 0;
+        const power = c.data.isOn ? 'ON' : 'OFF';
+        return `Time: ${c.timestamp.toLocaleTimeString()}, Brightness: ${brightness}%, Power: ${power}`;
+      }).join('\n');
+
+      const currentBrightness = context.data.dimmerValue !== undefined ? context.data.dimmerValue : 0;
+      const currentPower = context.data.isOn ? 'ON' : 'OFF';
+
+      return `You are an IoT device monitor. Analyze this dimmer device activity.
+
+Device: ${context.deviceName}
+Type: Dimmer
+Current Brightness: ${currentBrightness}%
+Current State: ${currentPower}
+Topic: ${context.topic}
+Timestamp: ${context.timestamp.toLocaleString()}
+
+Recent Activity:
+${history || 'No previous data'}
+
+Task: Analyze this dimmer activity and provide:
+1. Usage pattern assessment (e.g., frequently adjusted, stable brightness, energy efficiency)
+2. Any unusual behavior detected (e.g., rapid brightness changes, stuck at 0% or 100%)
+3. Recommended actions if needed (e.g., "Consider automating based on time of day")
+4. Priority level (low/medium/high/critical)
+
+Format your response as:
+STATUS: [normal/warning/critical]
+ANALYSIS: [your analysis]
+RECOMMENDATION: [your recommendation or "none"]
+PRIORITY: [low/medium/high/critical]`;
+    }
+
+    case 'shutter': {
+      const history = deviceBuffer.slice(-5).map(c => {
+        const position = c.data.shutterPosition !== undefined ? c.data.shutterPosition : 0;
+        const state = position === 0 ? '(Closed)' : position === 100 ? '(Open)' : '(Partially open)';
+        return `Time: ${c.timestamp.toLocaleTimeString()}, Position: ${position}% ${state}`;
+      }).join('\n');
+
+      const currentPosition = context.data.shutterPosition !== undefined ? context.data.shutterPosition : 0;
+      const currentState = currentPosition === 0 ? '(Closed)'
+        : currentPosition === 100 ? '(Open)'
+        : '(Partially open)';
+
+      return `You are an IoT device monitor. Analyze this shutter/blind device activity.
+
+Device: ${context.deviceName}
+Type: Shutter/Blind
+Current Position: ${currentPosition}% ${currentState}
+Topic: ${context.topic}
+Timestamp: ${context.timestamp.toLocaleString()}
+
+Recent Activity:
+${history || 'No previous data'}
+
+Task: Analyze this shutter activity and provide:
+1. Usage pattern assessment (e.g., regular schedule, manual adjustments, weather-responsive)
+2. Any unusual behavior detected (e.g., stuck position, erratic movements, incomplete operations)
+3. Recommended actions if needed (e.g., "Schedule based on sunrise/sunset", "Check for mechanical issues")
+4. Priority level (low/medium/high/critical)
+
+Format your response as:
+STATUS: [normal/warning/critical]
+ANALYSIS: [your analysis]
+RECOMMENDATION: [your recommendation or "none"]
+PRIORITY: [low/medium/high/critical]`;
+    }
+
+    case 'switch':
+    default: {
+      const history = deviceBuffer.slice(-5).map(c => {
+        const state = c.data.isOn ? 'ON' : 'OFF';
+        const channel = c.data.channel ? ` (POWER${c.data.channel})` : '';
+        return `Time: ${c.timestamp.toLocaleTimeString()}, State: ${state}${channel}`;
+      }).join('\n');
+
+      const currentState = context.data.isOn ? 'ON' : 'OFF';
+      const channel = context.data.channel ? ` (POWER${context.data.channel})` : '';
 
       return `You are an IoT device monitor. Analyze this switch device activity.
 
 Device: ${context.deviceName}
-Type: Switch
-Current State: ${context.data.isOn ? 'ON' : 'OFF'}
+Type: Switch${channel}
+Current State: ${currentState}
 Topic: ${context.topic}
 Timestamp: ${context.timestamp.toLocaleString()}
 
@@ -310,9 +392,9 @@ Recent Activity:
 ${history || 'No previous data'}
 
 Task: Analyze this switch activity and provide:
-1. Usage pattern assessment
-2. Any unusual behavior detected
-3. Recommended actions if needed
+1. Usage pattern assessment (e.g., frequent toggling, left on for extended periods, typical on/off cycles)
+2. Any unusual behavior detected (e.g., rapid switching, unexpected state changes, power anomalies)
+3. Recommended actions if needed (e.g., "Consider timer automation", "Check for electrical issues")
 4. Priority level (low/medium/high/critical)
 
 Format your response as:
@@ -322,6 +404,7 @@ RECOMMENDATION: [your recommendation or "none"]
 PRIORITY: [low/medium/high/critical]`;
     }
   }
+}
 
   /**
    * Query Ollama API
@@ -372,9 +455,9 @@ PRIORITY: [low/medium/high/critical]`;
   /**
    * Parse AI response into structured analysis
    */
-  private parseAIResponse(response: string, context: DeviceContext): AIAnalysis {
+  private parseAIResponse(response: string): AIAnalysis {
     const lines = response.split('\n');
-    let status = 'normal';
+    //let status = 'normal';
     let analysis = '';
     let recommendation = '';
     let priority: 'low' | 'medium' | 'high' | 'critical' = 'low';

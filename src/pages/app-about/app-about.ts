@@ -5,7 +5,7 @@ import { customElement } from 'lit/decorators.js';
 // if you prefer to keep your CSS seperate from your component
 import { styles } from './about-styles';
 
-import { styles as sharedStyles } from '../../styles/shared-styles'
+import { supabaseConfigStyles as sharedStyles } from '../../styles/shared-styles'
 
 import '@shoelace-style/shoelace/dist/components/card/card.js';
 

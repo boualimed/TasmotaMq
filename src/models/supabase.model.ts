@@ -48,7 +48,7 @@ export interface DeviceStateRecord {
   user_id: string;
   device_id: string;
   device_name: string;
-  device_type: 'switch' | 'sensor';
+  device_type: 'switch' | 'sensor' | 'dimmer' | 'shutter'; // ✅ Fixed
   is_connected: boolean;
   is_on?: boolean;
   sensor_data?: any;
@@ -57,6 +57,7 @@ export interface DeviceStateRecord {
   created_at?: string;
   updated_at?: string;
 }
+
 
 export interface DeviceHistoryRecord {
   id?: string;

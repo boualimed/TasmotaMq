@@ -1,15 +1,21 @@
 import { css } from 'lit';
 
+// ============================================================================
+// firebase-config.styles.ts - Modern Dark Theme
+// ============================================================================
+
 export const firebaseConfigStyles = css`
   :host {
     display: block;
   }
 
   .firebase-section {
-    background: white;
-    border-radius: 15px;
-    padding: 25px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    background: rgba(30, 41, 59, 0.6);
+    backdrop-filter: blur(20px);
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(148, 163, 184, 0.2);
     margin-bottom: 25px;
   }
 
@@ -17,28 +23,30 @@ export const firebaseConfigStyles = css`
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
   }
 
   .section-title {
-    font-size: 1.3rem;
-    font-weight: 600;
-    color: #333;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .firebase-toggle {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #f1f5f9;
     display: flex;
     align-items: center;
     gap: 12px;
   }
 
+  .firebase-toggle {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
   .toggle-switch {
     position: relative;
-    width: 56px;
-    height: 28px;
+    width: 60px;
+    height: 32px;
   }
 
   .toggle-switch input {
@@ -54,25 +62,28 @@ export const firebaseConfigStyles = css`
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #ccc;
-    transition: 0.3s;
-    border-radius: 28px;
+    background: rgba(107, 114, 128, 0.5);
+    transition: 0.4s;
+    border-radius: 32px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
   }
 
   .toggle-slider:before {
     position: absolute;
     content: "";
-    height: 20px;
-    width: 20px;
+    height: 24px;
+    width: 24px;
     left: 4px;
-    bottom: 4px;
+    bottom: 3px;
     background-color: white;
-    transition: 0.3s;
+    transition: 0.4s;
     border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   }
 
   input:checked + .toggle-slider {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-color: #3b82f6;
   }
 
   input:checked + .toggle-slider:before {
@@ -81,14 +92,15 @@ export const firebaseConfigStyles = css`
 
   .toggle-label {
     font-weight: 600;
-    color: #666;
+    color: #cbd5e1;
+    font-size: 0.95rem;
   }
 
   .config-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 15px;
-    margin-bottom: 20px;
+    gap: 18px;
+    margin-bottom: 24px;
   }
 
   .config-item {
@@ -102,56 +114,64 @@ export const firebaseConfigStyles = css`
   }
 
   .config-label {
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: #555;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #e2e8f0;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
   }
 
   .required {
-    color: #ef4444;
+    color: #fca5a5;
   }
 
   .config-input {
-    padding: 12px 15px;
-    border: 2px solid #e1e5e9;
+    padding: 14px 18px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
     border-radius: 10px;
     font-size: 1rem;
     transition: all 0.3s ease;
-    background: #f8f9fa;
+    background: rgba(15, 23, 42, 0.5);
+    color: #f1f5f9;
+    box-sizing: border-box;
+  }
+
+  .config-input::placeholder {
+    color: #64748b;
   }
 
   .config-input:focus {
     outline: none;
-    border-color: #667eea;
-    background: white;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: #3b82f6;
+    background: rgba(15, 23, 42, 0.7);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   .config-input:disabled {
-    background: #e5e7eb;
+    background: rgba(15, 23, 42, 0.3);
     cursor: not-allowed;
+    opacity: 0.5;
   }
 
   .help-text {
-    font-size: 0.8rem;
-    color: #666;
+    font-size: 0.85rem;
+    color: #94a3b8;
     margin-top: 4px;
+    line-height: 1.4;
   }
 
   .button-group {
     display: flex;
     gap: 12px;
-    margin-top: 20px;
+    margin-top: 24px;
   }
 
   .btn {
     flex: 1;
-    padding: 14px 20px;
+    padding: 14px 24px;
     border: none;
-    border-radius: 10px;
+    border-radius: 12px;
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
@@ -159,134 +179,168 @@ export const firebaseConfigStyles = css`
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.2),
+      transparent
+    );
+    transition: left 0.5s;
+  }
+
+  .btn:hover::before {
+    left: 100%;
   }
 
   .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     color: white;
+    box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
   }
 
-  .btn-primary:hover {
+  .btn-primary:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 15px 40px rgba(59, 130, 246, 0.4);
   }
 
   .btn-secondary {
     background: linear-gradient(135deg, #10b981 0%, #059669 100%);
     color: white;
+    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
   }
 
-  .btn-secondary:hover {
+  .btn-secondary:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 15px 40px rgba(16, 185, 129, 0.4);
   }
 
   .btn:disabled {
-    background: #9ca3af;
+    background: #4b5563;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+    opacity: 0.6;
+  }
+
+  .btn:disabled::before {
+    display: none;
   }
 
   .status-banner {
-    padding: 12px 16px;
-    border-radius: 10px;
+    padding: 14px 18px;
+    border-radius: 12px;
     margin-bottom: 20px;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    font-weight: 500;
+    border: 1px solid;
   }
 
   .status-banner.success {
-    background: rgba(16, 185, 129, 0.1);
-    color: #059669;
-    border: 2px solid rgba(16, 185, 129, 0.2);
+    background: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
+    border-color: rgba(16, 185, 129, 0.3);
   }
 
   .status-banner.error {
-    background: rgba(239, 68, 68, 0.1);
-    color: #dc2626;
-    border: 2px solid rgba(239, 68, 68, 0.2);
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.3);
   }
 
   .status-banner.warning {
-    background: rgba(251, 191, 36, 0.1);
-    color: #d97706;
-    border: 2px solid rgba(251, 191, 36, 0.2);
+    background: rgba(251, 191, 36, 0.15);
+    color: #fcd34d;
+    border-color: rgba(251, 191, 36, 0.3);
   }
 
   .info-box {
-    background: #eff6ff;
+    background: rgba(59, 130, 246, 0.1);
     border-left: 4px solid #3b82f6;
-    padding: 16px;
-    border-radius: 8px;
+    padding: 18px;
+    border-radius: 10px;
     margin-bottom: 20px;
   }
 
   .info-box-title {
-    font-weight: 600;
-    color: #1e40af;
-    margin-bottom: 8px;
+    font-weight: 700;
+    color: #93c5fd;
+    margin-bottom: 10px;
+    font-size: 1rem;
   }
 
   .info-box-content {
     font-size: 0.9rem;
-    color: #1e40af;
+    color: #cbd5e1;
     line-height: 1.6;
   }
 
   .info-box-content ol {
-    margin: 8px 0;
-    padding-left: 20px;
+    margin: 10px 0;
+    padding-left: 24px;
   }
 
   .info-box-content li {
-    margin: 4px 0;
+    margin: 6px 0;
   }
 
   .info-box-content code {
-    background: #dbeafe;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-family: monospace;
+    background: rgba(15, 23, 42, 0.6);
+    color: #93c5fd;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
     font-size: 0.85rem;
   }
 
   .sync-options {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 16px;
-    background: #f9fafb;
-    border-radius: 10px;
+    gap: 14px;
+    padding: 18px;
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 12px;
     margin-top: 20px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
   }
 
   .sync-option {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
   }
 
   .checkbox {
-    width: 18px;
-    height: 18px;
-    accent-color: #667eea;
+    width: 20px;
+    height: 20px;
+    accent-color: #3b82f6;
     cursor: pointer;
   }
 
   .checkbox-label {
-    font-size: 0.9rem;
-    color: #333;
+    font-size: 0.95rem;
+    color: #e2e8f0;
     cursor: pointer;
   }
 
   .loading-spinner {
     display: inline-block;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     border-top-color: white;
@@ -298,6 +352,10 @@ export const firebaseConfigStyles = css`
   }
 
   @media (max-width: 768px) {
+    .firebase-section {
+      padding: 20px;
+    }
+
     .config-grid {
       grid-template-columns: 1fr;
     }
