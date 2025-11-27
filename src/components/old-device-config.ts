@@ -1,16 +1,15 @@
-// ADD these new imports to your existing imports
-import { serviceManager } from '../services/service-manager';
-import { ollamaAIService, DeviceContext } from '../services/ollama-ai.service';
-import '../components/ai-settings.component';
-import '../components/supabase-config';
-
-// Your existing imports...
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
+
+// Styles
 import { deviceConfigStyles } from '../styles/device-config.styles';
+
+// Models
 import { MqttSettings, DEFAULT_MQTT_SETTINGS } from '../models/mqtt-settings.model';
 import { Device, NewDeviceInput, DEFAULT_NEW_DEVICE } from '../models/device.model';
 import { LogEntry } from '../models/app-state.model';
+
+// Services
 import { mqttService, ConnectionStatus } from '../services/mqtt-service';
 import { deviceService } from '../services/device-service';
 import { storageService } from '../services/storage-service';
@@ -19,6 +18,7 @@ import { deviceMonitorService } from '../services/device-monitor.service';
 import { authService } from '../services/auth.service';
 import { firebaseService } from '../services/firebase.service';
 import { supabaseService } from '../services/supabase.service';
+// Utils
 import { logger } from '../utils/logger.util';
 import { flattenObject } from '../utils/json-parser.util';
 import { extractJsonValue } from '../utils/json-parser.util';
@@ -40,41 +40,27 @@ export class DeviceConfig extends LitElement {
   private unsubscribers: (() => void)[] = [];
   private deviceStatusMap: Map<string, boolean> = new Map();
 
-  async connectedCallback() {
+ connectedCallback() {
     super.connectedCallback();
 
     // Get current user
     const user = authService.getCurrentUser();
     this.currentUser = user?.username || 'User';
 
-    // Load state first
     this.loadState();
-
-    // Initialize services using service manager (handles order correctly)
-    await serviceManager.initialize();
-
-    // Setup subscriptions AFTER services are initialized
     this.setupSubscriptions();
 
-    // Auto-reconnect if needed
     if (this.mqttSettings.wasConnected && this.mqttSettings.host) {
       logger.addLog('info', 'Attempting to auto-reconnect...');
       setTimeout(() => this.handleConnect(), 1000);
     }
   }
 
+
   disconnectedCallback() {
     super.disconnectedCallback();
     this.saveState();
     this.cleanup();
-
-    // NEW: Cleanup AI service
-    ollamaAIService.destroy();
-  }
-
-  // NEW: Trigger manual AI analysis
-  private async handleAnalyzeNow(): Promise<void> {
-    await ollamaAIService.analyzeNow();
   }
 
   private setupSubscriptions(): void {
@@ -166,14 +152,6 @@ export class DeviceConfig extends LitElement {
       })
     );
 
-    // NEW: Subscribe to AI config changes
-    this.unsubscribers.push(
-      ollamaAIService.onConfigChange((config) => {
-        // Config updated, no need to trigger full re-render
-        logger.addLog('info', '🤖 AI config synchronized');
-      })
-    );
-
     // Setup device monitor callback
     deviceMonitorService.onDeviceStatusChange((deviceId, isActive) => {
       deviceService.updateDevice(deviceId, { isConnected: isActive });
@@ -212,7 +190,6 @@ export class DeviceConfig extends LitElement {
     });
   }
 
-  // MODIFIED: Enhanced with AI data feeding
   private handleMqttMessage(message: { topic: string; payload: any }): void {
     const { topic, payload } = message;
 
@@ -265,18 +242,6 @@ export class DeviceConfig extends LitElement {
           `${device.name} LWT: ${lwtStatus}`
         );
 
-        // Feed to AI (with deduplication)
-        if (ollamaAIService.getConfig().enabled) {
-          const context: DeviceContext = {
-            deviceId: device.id,
-            deviceName: device.name,
-            deviceType: device.type,
-            topic: topic,
-            data: { lwtStatus, isOnline },
-            timestamp: new Date()
-          };
-          ollamaAIService.processMqttData(context);
-        }
         return;
       }
 
@@ -342,20 +307,6 @@ export class DeviceConfig extends LitElement {
           }
 
           logger.addLog('success', `${device.name} state updated: ${isOn ? 'ON' : 'OFF'}`);
-
-          // Feed to AI after state update
-          if (ollamaAIService.getConfig().enabled) {
-            const context: DeviceContext = {
-              deviceId: device.id,
-              deviceName: device.name,
-              deviceType: 'switch',
-              topic: topic,
-              data: { isOn, previousState },
-              timestamp: new Date(),
-              previousData: { isOn: previousState }
-            };
-            ollamaAIService.processMqttData(context);
-          }
         }
       }
 
@@ -387,19 +338,6 @@ export class DeviceConfig extends LitElement {
           }
 
           deviceService.updateDevice(device.id, updates);
-
-          // Feed to AI after state update
-          if (ollamaAIService.getConfig().enabled) {
-            const context: DeviceContext = {
-              deviceId: device.id,
-              deviceName: device.name,
-              deviceType: 'sensor',
-              topic: topic,
-              data: sensorData,
-              timestamp: new Date()
-            };
-            ollamaAIService.processMqttData(context);
-          }
         }
       }
 
@@ -609,10 +547,10 @@ export class DeviceConfig extends LitElement {
     const { route } = e.detail;
 
     switch (route) {
-      case 'supabase':
+      case 'firebase':
         this.saveState();
         this.dispatchEvent(new CustomEvent('navigate', {
-          detail: { page: 'supabase-config' },
+          detail: { page: 'dropdown' },
           bubbles: true,
           composed: true
         }));
@@ -623,33 +561,9 @@ export class DeviceConfig extends LitElement {
         break;
 
       case 'export':
-        this.handleExportData();
+        // You can implement export logic or navigation here
         break;
     }
-  }
-
-  private handleExportData(): void {
-    const state = storageService.load();
-    if (!state) {
-      notificationService.warning('No data to export', 3000);
-      return;
-    }
-
-    const dataStr = JSON.stringify(state, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `tasmota-config-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-
-    notificationService.success('✅ Configuration exported!', 3000);
-  }
-
-  private handleAIConfigChanged(): void {
-    // Don't trigger re-render, config is already saved by AI service
-    logger.addLog('info', '🤖 AI configuration updated');
   }
 
   render() {
@@ -694,7 +608,7 @@ export class DeviceConfig extends LitElement {
               🚪 Logout
             </button>
           </div>
-          <firebase-dropdown @navigate="${this.handleSettingsNavigation}"></firebase-dropdown>
+          <firebase-dropdown @navigate="${this.handleSettingsNavigation}"></settings-dropdown>
         </div>
 
         ${this.errorMessage ? html`
@@ -702,7 +616,6 @@ export class DeviceConfig extends LitElement {
         ` : ''}
 
         <div class="main-grid">
-          <!-- MQTT Connection Section -->
           <div class="section">
             <div class="section-title">🔗 MQTT Connection Settings</div>
 
@@ -782,22 +695,6 @@ export class DeviceConfig extends LitElement {
             `}
           </div>
 
-          <!-- AI Settings Section -->
-          <div class="section">
-            <ai-settings @config-changed="${this.handleAIConfigChanged}"></ai-settings>
-
-            ${ollamaAIService.getConfig().enabled ? html`
-              <button
-                class="button secondary"
-                @click="${this.handleAnalyzeNow}"
-                style="margin-top: 10px; width: 100%;"
-              >
-                🧠 Analyze Now
-              </button>
-            ` : ''}
-          </div>
-
-          <!-- Device Management Section -->
           <div class="section">
             <div class="section-title">📱 Device Management</div>
 
@@ -903,10 +800,11 @@ export class DeviceConfig extends LitElement {
                 </div>
               `)}
             </div>
+
           </div>
         </div>
 
-        <!-- Devices Section -->
+
         <div class="devices-section">
           <div class="section-title">🏠 Connected Devices (${this.devices.length})</div>
 

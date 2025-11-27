@@ -43,6 +43,7 @@ export class AppIndex extends LitElement {
       } else if (page === 'auth-login') {
         router.navigate(resolveRouterPath('login'));
       }
+
     });
   }
 

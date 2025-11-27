@@ -14,6 +14,7 @@ export interface FirebaseSettings {
   config: FirebaseConfig;
   syncDevices: boolean;
   syncMqttSettings: boolean;
+  storeMqttMessages: boolean;
   lastSync?: Date;
 }
 
@@ -30,5 +31,6 @@ export const DEFAULT_FIREBASE_SETTINGS: FirebaseSettings = {
     databaseURL: ''
   },
   syncDevices: true,
-  syncMqttSettings: true
+  syncMqttSettings: true,
+  storeMqttMessages: false
 };

@@ -1,7 +1,9 @@
 import { AppState } from '../models/app-state.model';
 import { Device } from '../models/device.model';
+import { OllamaConfig } from '../services/ollama-ai.service';
 
 const STORAGE_KEY = 'appState';
+const AI_CONFIG_KEY = 'ollama_ai_config';
 
 export class StorageService {
   /**
@@ -26,11 +28,11 @@ export class StorageService {
 
       const parsed = JSON.parse(raw);
 
-      // Deserialize dates
+      // Deserialize dates - but DON'T reset connection state
       if (parsed.devices) {
         parsed.devices = parsed.devices.map((d: Device) => ({
           ...d,
-          isConnected: false, // Reset connection state on load
+          // Keep the saved connection state instead of resetting
           lastSeen: d.lastSeen ? new Date(d.lastSeen) : undefined
         }));
       }
@@ -43,11 +45,38 @@ export class StorageService {
   }
 
   /**
+   * Saves AI configuration
+   */
+  saveAIConfig(config: OllamaConfig): void {
+    try {
+      const serialized = JSON.stringify(config);
+      localStorage.setItem(AI_CONFIG_KEY, serialized);
+    } catch (error) {
+      console.error('Failed to save AI config:', error);
+    }
+  }
+
+  /**
+   * Loads AI configuration
+   */
+  loadAIConfig(): OllamaConfig | null {
+    try {
+      const raw = localStorage.getItem(AI_CONFIG_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (error) {
+      console.error('Failed to load AI config:', error);
+      return null;
+    }
+  }
+
+  /**
    * Clears all stored data
    */
   clear(): void {
     try {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(AI_CONFIG_KEY);
     } catch (error) {
       console.error('Failed to clear state:', error);
     }

@@ -20,6 +20,7 @@ import './components/device-config.js';
 import './components/dropdown.js';
 import './components/firebase-config.js';
 import './components/supabase-config.js';
+import './components/ai-settings.component.js';
 
 const baseURL: string = (import.meta as any).env.BASE_URL;
 
@@ -103,6 +104,24 @@ export const router = new Router({
       ],
       render: () => html`<supabase-config></supabase-config>`
     },
+
+    {
+      path: resolveRouterPath('supabase'),
+      title: 'Supabase Configuration',
+      plugins: [
+        lazy(() => import('./components/supabase-config.js')),
+      ],
+      render: () => html`<supabase-config></supabase-config>`
+    },
+    {
+      path: resolveRouterPath('ollama'),
+      title: 'Ollama Configuration',
+      plugins: [
+        lazy(() => import('./components/ai-settings.component.js')),
+      ],
+      render: () => html`<ai-settings></ai-settings>`
+    },
+
 
   ]
 });

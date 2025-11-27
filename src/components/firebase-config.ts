@@ -18,12 +18,25 @@ export class FirebaseConfig extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.loadSettings();
+
+    // Auto-initialize if already configured
+    const settings = firebaseService.getSettings();
+    if (settings?.enabled && this.validateConfig()) {
+      firebaseService.initialize(settings.config).then(result => {
+        if (result.success) {
+          console.log('Firebase auto-initialized from saved settings');
+        }
+      });
+    }
   }
 
   private loadSettings(): void {
     const loaded = firebaseService.getSettings();
     if (loaded) {
       this.settings = { ...loaded };
+      console.log('Loaded Firebase settings from localStorage:', loaded);
+    } else {
+      console.log('No saved Firebase settings found');
     }
   }
 
@@ -43,7 +56,7 @@ export class FirebaseConfig extends LitElement {
     };
   }
 
-  private handleSyncOptionChange(e: Event, field: 'syncDevices' | 'syncMqttSettings'): void {
+  private handleSyncOptionChange(e: Event, field: 'syncDevices' | 'syncMqttSettings' | 'storeMqttMessages'): void {
     const input = e.target as HTMLInputElement;
     this.settings = { ...this.settings, [field]: input.checked };
   }
@@ -119,7 +132,8 @@ export class FirebaseConfig extends LitElement {
       config.projectId &&
       config.storageBucket &&
       config.messagingSenderId &&
-      config.appId
+      config.appId &&
+      config.databaseURL
     );
   }
 
@@ -353,6 +367,18 @@ export class FirebaseConfig extends LitElement {
               />
               <label for="syncMqtt" class="checkbox-label">
                 Sync MQTT settings to Firebase
+              </label>
+            </div>
+            <div class="sync-option">
+              <input
+                type="checkbox"
+                class="checkbox"
+                id="storeMqttMessages"
+                .checked="${this.settings.storeMqttMessages}"
+                @change="${(e: Event) => this.handleSyncOptionChange(e, 'storeMqttMessages')}"
+              />
+              <label for="storeMqttMessages" class="checkbox-label">
+                Store MQTT messages (real-time streaming)
               </label>
             </div>
           </div>

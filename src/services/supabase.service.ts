@@ -10,6 +10,7 @@ import { logger } from '../utils/logger.util';
 
 // Supabase client will be loaded dynamically
 let supabaseClient: any = null;
+let currentClientConfig: { url: string; key: string } | null = null;
 
 const SUPABASE_STORAGE_KEY = 'supabaseSettings';
 
@@ -28,16 +29,58 @@ export class SupabaseService {
   }
 
   /**
+   * Gets or creates Supabase client (singleton pattern)
+   */
+  private async getClient(config: SupabaseConfig): Promise<any> {
+    // If client exists and config matches, reuse it
+    if (supabaseClient && currentClientConfig &&
+        currentClientConfig.url === config.url &&
+        currentClientConfig.key === config.anonKey) {
+      return supabaseClient;
+    }
+
+    // Clean up old client if it exists
+    if (supabaseClient) {
+      try {
+        // Remove auth listener if it exists
+        supabaseClient.auth?.stopAutoRefresh?.();
+        supabaseClient = null;
+        currentClientConfig = null;
+      } catch (error) {
+        console.warn('Error cleaning up old Supabase client:', error);
+      }
+    }
+
+    // Create new client
+    const { createClient } = await import('@supabase/supabase-js');
+
+    supabaseClient = createClient(config.url, config.anonKey, {
+      auth: {
+        persistSession: false, // Disable session persistence to avoid multiple instances
+        autoRefreshToken: false, // Disable auto-refresh
+        detectSessionInUrl: false // Disable URL session detection
+      }
+    });
+
+    currentClientConfig = {
+      url: config.url,
+      key: config.anonKey
+    };
+
+    return supabaseClient;
+  }
+
+  /**
    * Initializes Supabase client
    */
   async initialize(config: SupabaseConfig): Promise<{ success: boolean; error?: string }> {
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-
-      supabaseClient = createClient(config.url, config.anonKey);
+      const client = await this.getClient(config);
 
       // Test connection
-      const { error } = await supabaseClient.from('mqtt_messages').select('count', { count: 'exact', head: true });
+      const { error } = await client
+        .from('mqtt_messages')
+        .select('count', { count: 'exact', head: true });
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = table doesn't exist yet
         throw new Error(error.message);
@@ -74,11 +117,17 @@ export class SupabaseService {
         return { success: false, error: 'Invalid Anon Key format. Should be a JWT token starting with eyJ' };
       }
 
+      // Create a test client with minimal options
       const { createClient } = await import('@supabase/supabase-js');
-      const testClient = createClient(config.url, config.anonKey);
+      const testClient = createClient(config.url, config.anonKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false
+        }
+      });
 
       // Try a simple query to test connection
-      // This will work even if tables don't exist yet
       const { error } = await testClient
         .from('mqtt_messages')
         .select('count', { count: 'exact', head: true })
@@ -445,6 +494,18 @@ export class SupabaseService {
   disconnect(): void {
     this.stopBatchProcessor();
     this.flushAll(); // Final flush
+
+    // Clean up client
+    if (supabaseClient) {
+      try {
+        supabaseClient.auth?.stopAutoRefresh?.();
+      } catch (error) {
+        console.warn('Error stopping auth refresh:', error);
+      }
+      supabaseClient = null;
+      currentClientConfig = null;
+    }
+
     this.initialized = false;
     logger.addLog('info', 'Supabase disconnected');
   }

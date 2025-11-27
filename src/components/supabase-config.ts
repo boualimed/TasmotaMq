@@ -1,342 +1,270 @@
-import { LitElement, html } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
-import { supabaseConfigStyles } from '../styles/supabase-config.styles';
-import { supabaseService } from '../services/supabase.service';
+import { LitElement, html, css } from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
 import { SupabaseSettings, DEFAULT_SUPABASE_SETTINGS } from '../models/supabase.model';
+import { serviceManager } from '../services/service-manager';
 import { notificationService } from '../services/notification.service';
+import { logger } from '../utils/logger.util';
+import { supabaseStyles } from '../styles/supabase.styles';
 
 @customElement('supabase-config')
 export class SupabaseConfig extends LitElement {
-  static styles = supabaseConfigStyles;
+  static styles = supabaseStyles;
 
-  @state() private settings: SupabaseSettings = { ...DEFAULT_SUPABASE_SETTINGS };
-  @state() private isLoading = false;
+  @property({ type: Object }) settings: SupabaseSettings = { ...DEFAULT_SUPABASE_SETTINGS };
   @state() private isTesting = false;
-  @state() private statusMessage = '';
-  @state() private statusType: 'success' | 'error' | '' = '';
-  @state() private stats = { insertCount: 0, errorCount: 0, queueSize: 0 };
-
-  private statsInterval: any;
+  @state() private isSaving = false;
 
   connectedCallback() {
     super.connectedCallback();
+    // Load settings without triggering update
     this.loadSettings();
-    this.startStatsUpdater();
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    if (this.statsInterval) {
-      clearInterval(this.statsInterval);
-    }
   }
 
   private loadSettings(): void {
-    const loaded = supabaseService.getSettings();
-    if (loaded) {
-      this.settings = { ...loaded };
+    const saved = localStorage.getItem('supabaseSettings');
+    if (saved) {
+      try {
+        this.settings = JSON.parse(saved);
+      } catch (error) {
+        console.error('Failed to load Supabase settings:', error);
+      }
     }
   }
 
-  private startStatsUpdater(): void {
-    this.statsInterval = setInterval(() => {
-      this.stats = supabaseService.getStats();
-    }, 2000);
-  }
-
-  private handleToggleEnable(e: Event): void {
-    const input = e.target as HTMLInputElement;
-    this.settings = { ...this.settings, enabled: input.checked };
-  }
-
-  private handleConfigChange(e: Event, field: 'url' | 'anonKey' | 'serviceRoleKey'): void {
-    const input = e.target as HTMLInputElement;
-    this.settings = {
-      ...this.settings,
-      config: {
-        ...this.settings.config,
-        [field]: input.value
-      }
-    };
-  }
-
-  private handleStorageOptionChange(e: Event, field: 'storeMqttMessages' | 'storeDeviceStates'): void {
-    const input = e.target as HTMLInputElement;
-    this.settings = { ...this.settings, [field]: input.checked };
-  }
-
-  private handleNumberChange(e: Event, field: 'retentionDays' | 'batchSize' | 'batchInterval'): void {
-    const input = e.target as HTMLInputElement;
-    const value = parseInt(input.value) || 0;
-    this.settings = { ...this.settings, [field]: value };
+  private handleSettingChange(field: string, value: any): void {
+    const parts = field.split('.');
+    if (parts.length === 1) {
+      this.settings = { ...this.settings, [parts[0]]: value };
+    } else if (parts.length === 2) {
+      this.settings = {
+        ...this.settings,
+        [parts[0]]: {
+          ...(this.settings[parts[0] as keyof SupabaseSettings] as any),
+          [parts[1]]: value
+        }
+      };
+    }
   }
 
   private async handleTestConnection(): Promise<void> {
-    if (!this.validateConfig()) {
-      this.statusType = 'error';
-      this.statusMessage = 'Please fill in URL and Anon Key';
-      return;
-    }
-
     this.isTesting = true;
-    this.statusMessage = 'Testing connection...';
-    this.statusType = '';
 
-    const result = await supabaseService.testConnection(this.settings.config);
+    try {
+      notificationService.info('🔍 Testing Supabase connection...', 2000);
 
-    this.isTesting = false;
+      const { createClient } = await import('@supabase/supabase-js');
+      const testClient = createClient(this.settings.config.url, this.settings.config.anonKey);
 
-    if (result.success) {
-      this.statusType = 'success';
-      this.statusMessage = '✓ Connection successful! Supabase is configured correctly.';
-      notificationService.success('Supabase connection test passed!', 3000);
-    } else {
-      this.statusType = 'error';
-      this.statusMessage = `✗ Connection failed: ${result.error}`;
-      notificationService.error(`Connection test failed: ${result.error}`, 5000);
+      const { error } = await testClient
+        .from('mqtt_messages')
+        .select('count', { count: 'exact', head: true })
+        .limit(0);
+
+      if (error && error.code !== 'PGRST116') {
+        throw new Error(error.message);
+      }
+
+      notificationService.success('✅ Connection successful!', 3000);
+      logger.addLog('success', 'Supabase connection test passed');
+    } catch (error: any) {
+      notificationService.error(`❌ Connection failed: ${error.message}`, 5000);
+      logger.addLog('error', `Supabase test failed: ${error.message}`);
+    } finally {
+      this.isTesting = false;
     }
   }
 
-  private async handleSaveSettings(): Promise<void> {
-    if (!this.validateConfig()) {
-      this.statusType = 'error';
-      this.statusMessage = 'Please fill in required fields';
-      return;
+  private async handleSave(): Promise<void> {
+    this.isSaving = true;
+
+    try {
+      // Use service manager to properly initialize
+      await serviceManager.updateSupabaseSettings(this.settings);
+
+      notificationService.success('✅ Settings saved successfully!', 3000);
+      logger.addLog('success', 'Supabase settings saved');
+
+      // Emit event to parent
+      this.dispatchEvent(new CustomEvent('settings-saved', {
+        detail: { settings: this.settings },
+        bubbles: true,
+        composed: true
+      }));
+
+    } catch (error: any) {
+      notificationService.error(`❌ Failed to save: ${error.message}`, 5000);
+      logger.addLog('error', `Settings save failed: ${error.message}`);
+    } finally {
+      this.isSaving = false;
     }
+  }
 
-    this.isLoading = true;
-
-    if (this.settings.enabled) {
-      const result = await supabaseService.initialize(this.settings.config);
-
-      if (!result.success) {
-        this.statusType = 'error';
-        this.statusMessage = `Failed to initialize: ${result.error}`;
-        this.isLoading = false;
-        return;
-      }
-    }
-
-    supabaseService.saveSettings(this.settings);
-
-    this.isLoading = false;
-    this.statusType = 'success';
-    this.statusMessage = 'Supabase settings saved successfully!';
-    notificationService.success('Supabase settings saved!', 3000);
-
-    this.dispatchEvent(new CustomEvent('supabase-settings-saved', {
-      detail: this.settings,
+  private handleBack(): void {
+    this.dispatchEvent(new CustomEvent('navigate-back', {
       bubbles: true,
       composed: true
     }));
   }
 
-  private validateConfig(): boolean {
-    return !!(this.settings.config.url && this.settings.config.anonKey);
-  }
-
-  private async handleFlushQueues(): Promise<void> {
-    await supabaseService.flushAll();
-    notificationService.info('Queues flushed to Supabase', 2000);
-  }
-
   render() {
     return html`
-      <div class="supabase-section">
-        <div class="section-header">
-          <div class="section-title">
-            <span class="supabase-logo">⚡</span> Supabase Storage
-          </div>
-          <label class="toggle-switch">
-            <input
-              type="checkbox"
-              .checked="${this.settings.enabled}"
-              @change="${this.handleToggleEnable}"
-            />
-            <span class="toggle-slider"></span>
-          </label>
+      <div class="header">
+        <button class="back-button" @click="${this.handleBack}">←</button>
+        <div class="title">📊 Supabase Configuration</div>
+        <span class="status-badge ${this.settings.enabled ? 'enabled' : 'disabled'}">
+          ${this.settings.enabled ? '● Enabled' : '○ Disabled'}
+        </span>
+      </div>
+
+      <div class="info-box">
+        <p>
+          <strong>Supabase Integration:</strong> Store and analyze your MQTT data in the cloud.
+          Get real-time insights, historical data, and advanced analytics.
+        </p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">🔑 Connection Settings</div>
+
+        <div class="checkbox-group">
+          <input
+            type="checkbox"
+            class="checkbox"
+            .checked="${this.settings.enabled}"
+            @change="${(e: Event) => this.handleSettingChange('enabled', (e.target as HTMLInputElement).checked)}"
+          />
+          <label class="form-label">Enable Supabase Integration</label>
         </div>
 
-        ${this.statusMessage ? html`
-          <div class="status-banner ${this.statusType}">
-            ${this.statusMessage}
-          </div>
-        ` : ''}
-
-        <div class="info-box">
-          <div class="info-box-title">📖 How to get Supabase Configuration</div>
-          <div class="info-box-content">
-            <ol>
-              <li>Go to <a href="https://supabase.com/dashboard" target="_blank">Supabase Dashboard</a></li>
-              <li>Create a new project or select existing one</li>
-              <li>Go to Settings → API</li>
-              <li>Copy <code>Project URL</code> and <code>anon public</code> key</li>
-              <li>Run the SQL schema (see documentation)</li>
-              <li>Configure Row Level Security policies</li>
-            </ol>
-          </div>
-        </div>
-
-        <div class="config-grid">
-          <div class="config-item">
-            <label class="config-label">
-              Project URL <span class="required">*</span>
-            </label>
-            <input
-              type="text"
-              class="config-input"
-              placeholder="https://xxxxx.supabase.co"
-              .value="${this.settings.config.url}"
-              @input="${(e: Event) => this.handleConfigChange(e, 'url')}"
-              ?disabled="${!this.settings.enabled}"
-            />
-          </div>
-
-          <div class="config-item">
-            <label class="config-label">
-              Anon Key (Public) <span class="required">*</span>
-            </label>
-            <input
-              type="text"
-              class="config-input"
-              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-              .value="${this.settings.config.anonKey}"
-              @input="${(e: Event) => this.handleConfigChange(e, 'anonKey')}"
-              ?disabled="${!this.settings.enabled}"
-            />
-          </div>
-
-          <div class="config-item">
-            <label class="config-label">
-              Service Role Key (Optional)
-            </label>
-            <input
-              type="password"
-              class="config-input"
-              placeholder="Keep this secret!"
-              .value="${this.settings.config.serviceRoleKey || ''}"
-              @input="${(e: Event) => this.handleConfigChange(e, 'serviceRoleKey')}"
-              ?disabled="${!this.settings.enabled}"
-            />
+        <div class="form-group">
+          <label class="form-label">Project URL</label>
+          <input
+            type="text"
+            class="form-input"
+            placeholder="https://xxxxx.supabase.co"
+            .value="${this.settings.config?.url || ''}"
+            @input="${(e: Event) => this.handleSettingChange('config.url', (e.target as HTMLInputElement).value)}"
+            ?disabled="${!this.settings.enabled}"
+          />
+          <div class="help-text">
+            Find this in your Supabase project settings → API → Project URL
           </div>
         </div>
 
-        ${this.settings.enabled ? html`
-          <div class="storage-options">
-            <div class="storage-option">
-              <div class="checkbox-group">
-                <input
-                  type="checkbox"
-                  class="checkbox"
-                  id="storeMqtt"
-                  .checked="${this.settings.storeMqttMessages}"
-                  @change="${(e: Event) => this.handleStorageOptionChange(e, 'storeMqttMessages')}"
-                />
-                <label for="storeMqtt" class="checkbox-label">
-                  Store MQTT Messages
-                </label>
-              </div>
-              <div class="option-help">Real-time streaming to PostgreSQL</div>
-            </div>
-
-            <div class="storage-option">
-              <div class="checkbox-group">
-                <input
-                  type="checkbox"
-                  class="checkbox"
-                  id="storeStates"
-                  .checked="${this.settings.storeDeviceStates}"
-                  @change="${(e: Event) => this.handleStorageOptionChange(e, 'storeDeviceStates')}"
-                />
-                <label for="storeStates" class="checkbox-label">
-                  Store Device States
-                </label>
-              </div>
-              <div class="option-help">Track current device status</div>
-            </div>
-
-            <div class="storage-option">
-              <label class="config-label">Retention (days)</label>
-              <input
-                type="number"
-                class="number-input"
-                min="1"
-                max="365"
-                .value="${this.settings.retentionDays}"
-                @input="${(e: Event) => this.handleNumberChange(e, 'retentionDays')}"
-              />
-              <div class="option-help">Auto-cleanup old records</div>
-            </div>
-
-            <div class="storage-option">
-              <label class="config-label">Batch Size</label>
-              <input
-                type="number"
-                class="number-input"
-                min="10"
-                max="1000"
-                .value="${this.settings.batchSize}"
-                @input="${(e: Event) => this.handleNumberChange(e, 'batchSize')}"
-              />
-              <div class="option-help">Messages per batch</div>
-            </div>
-
-            <div class="storage-option">
-              <label class="config-label">Batch Interval (ms)</label>
-              <input
-                type="number"
-                class="number-input"
-                min="1000"
-                max="60000"
-                step="1000"
-                .value="${this.settings.batchInterval}"
-                @input="${(e: Event) => this.handleNumberChange(e, 'batchInterval')}"
-              />
-              <div class="option-help">Time between flushes</div>
-            </div>
+        <div class="form-group">
+          <label class="form-label">Anon Key</label>
+          <input
+            type="password"
+            class="form-input"
+            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            .value="${this.settings.config?.anonKey || ''}"
+            @input="${(e: Event) => this.handleSettingChange('config.anonKey', (e.target as HTMLInputElement).value)}"
+            ?disabled="${!this.settings.enabled}"
+          />
+          <div class="help-text">
+            Find this in your Supabase project settings → API → Project API keys → anon public
           </div>
-
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-value">${this.stats.insertCount}</div>
-              <div class="stat-label">Inserted</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value">${this.stats.errorCount}</div>
-              <div class="stat-label">Errors</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value">${this.stats.queueSize}</div>
-              <div class="stat-label">Queued</div>
-            </div>
-          </div>
-        ` : ''}
+        </div>
 
         <div class="button-group">
-          ${this.settings.enabled ? html`
-            <button
-              class="btn btn-secondary"
-              @click="${this.handleFlushQueues}"
-              ?disabled="${this.isLoading}"
-            >
-              🔄 Flush Queues
-            </button>
-          ` : ''}
           <button
-            class="btn btn-primary"
+            class="button secondary"
             @click="${this.handleTestConnection}"
-            ?disabled="${!this.settings.enabled || this.isTesting || !this.validateConfig()}"
+            ?disabled="${!this.settings.enabled || this.isTesting}"
           >
-            ${this.isTesting ? html`<span class="loading-spinner"></span>` : '🔍'} Test Connection
-          </button>
-          <button
-            class="btn btn-primary"
-            @click="${this.handleSaveSettings}"
-            ?disabled="${!this.settings.enabled || this.isLoading || !this.validateConfig()}"
-          >
-            ${this.isLoading ? html`<span class="loading-spinner"></span>` : '💾'} Save Settings
+            ${this.isTesting ? '⏳ Testing...' : '🔍 Test Connection'}
           </button>
         </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">⚙️ Data Storage Options</div>
+
+        <div class="checkbox-group">
+          <input
+            type="checkbox"
+            class="checkbox"
+            .checked="${this.settings.storeMqttMessages}"
+            @change="${(e: Event) => this.handleSettingChange('storeMqttMessages', (e.target as HTMLInputElement).checked)}"
+            ?disabled="${!this.settings.enabled}"
+          />
+          <label class="form-label">Store MQTT Messages</label>
+        </div>
+
+        <div class="checkbox-group">
+          <input
+            type="checkbox"
+            class="checkbox"
+            .checked="${this.settings.storeDeviceStates}"
+            @change="${(e: Event) => this.handleSettingChange('storeDeviceStates', (e.target as HTMLInputElement).checked)}"
+            ?disabled="${!this.settings.enabled}"
+          />
+          <label class="form-label">Store Device States</label>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Batch Size (messages per batch)</label>
+          <input
+            type="number"
+            class="form-input"
+            min="10"
+            max="1000"
+            .value="${this.settings.batchSize}"
+            @input="${(e: Event) => this.handleSettingChange('batchSize', parseInt((e.target as HTMLInputElement).value))}"
+            ?disabled="${!this.settings.enabled}"
+          />
+          <div class="help-text">
+            Number of messages to batch before sending to Supabase (10-1000)
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Batch Interval (milliseconds)</label>
+          <input
+            type="number"
+            class="form-input"
+            min="1000"
+            max="60000"
+            .value="${this.settings.batchInterval}"
+            @input="${(e: Event) => this.handleSettingChange('batchInterval', parseInt((e.target as HTMLInputElement).value))}"
+            ?disabled="${!this.settings.enabled}"
+          />
+          <div class="help-text">
+            How often to send batched data to Supabase (1000-60000ms)
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Data Retention (days)</label>
+          <input
+            type="number"
+            class="form-input"
+            min="1"
+            max="365"
+            .value="${this.settings.retentionDays}"
+            @input="${(e: Event) => this.handleSettingChange('retentionDays', parseInt((e.target as HTMLInputElement).value))}"
+            ?disabled="${!this.settings.enabled}"
+          />
+          <div class="help-text">
+            Automatically delete data older than this many days (1-365)
+          </div>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button
+          class="button primary"
+          @click="${this.handleSave}"
+          ?disabled="${this.isSaving}"
+        >
+          ${this.isSaving ? '⏳ Saving...' : '💾 Save Settings'}
+        </button>
+        <button
+          class="button secondary"
+          @click="${this.handleBack}"
+        >
+          Cancel
+        </button>
       </div>
     `;
   }
