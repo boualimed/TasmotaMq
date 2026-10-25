@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "id": "case-004",
+  "difficulty": "intermediate",
+  "depth": 3,
+  "title": { "ar": "جريمة في المتحف العتيق", "en": "Murder at the Ancient Museum" },
+  "intro": {
+    "ar": "عُثر على مدير المتحف الدكتور عادل مقتولًا بعد إغلاق الأبواب! اشتبه المحقق بأربعة أشخاص كانوا داخل المبنى وحديقته، وعليك باستخدام الأدلة تحديد القاتل ومكان الجريمة وسلاح الجريمة.",
+    "en": "Museum director Dr. Adel was found dead after the doors were locked! The detective suspects four people who were inside the building and its garden. Use the clues to determine the killer, location, and weapon."
+  },
+  "suspects": [
+    { "id": "s1", "name": { "ar": "الأستاذة ليلى" }, "desc": { "ar": "مرشدة المتحف، تحكي قصة كل قطعة بشغف." }, "facts": { "ar": "أيمن • عيناها بنيّتان" }, "attrs": { "hand": "right", "eyes": "brown" } },
+    { "id": "s2", "name": { "ar": "السيد مراد" }, "desc": { "ar": "مرمّم القطع الأثرية، يداه لا تهدآن لحظة." }, "facts": { "ar": "أعسر • عيناه خضراوان" }, "attrs": { "hand": "left", "eyes": "green" } },
+    { "id": "s3", "name": { "ar": "الدكتورة أميرة" }, "desc": { "ar": "خبيرة آثار صارمة تراجع كل قطعة ألف مرة." }, "facts": { "ar": "أيمن • عيناها عسليّتان" }, "attrs": { "hand": "right", "eyes": "hazel" } },
+    { "id": "s4", "name": { "ar": "العمّ بشير" }, "desc": { "ar": "الحارس الليلي القديم، يعرف كل زاوية في المبنى." }, "facts": { "ar": "أعسر • عيناه زرقاوان" }, "attrs": { "hand": "left", "eyes": "blue" } }
+  ],
+  "locations": [
+    { "id": "l1", "name": { "ar": "قاعة الفسيفساء" }, "desc": { "ar": "قاعة واسعة مغطّاة بلوحات فسيفساء عمرها قرون." }, "tags": ["indoors"] },
+    { "id": "l2", "name": { "ar": "الحديقة الأثرية" }, "desc": { "ar": "حديقة مفتوحة تتناثر فيها أعمدة رومانية قديمة." }, "tags": ["outdoors"] },
+    { "id": "l3", "name": { "ar": "مخزن القطع النادرة" }, "desc": { "ar": "غرفة باردة مليئة بالصناديق الخشبية والقطع المغطّاة بالأقمشة." }, "tags": ["indoors"] },
+    { "id": "l4", "name": { "ar": "مكتب المدير" }, "desc": { "ar": "مكتب أنيق تتكدّس فيه الخرائط والملفات القديمة." }, "tags": ["indoors"] }
+  ],
+  "weapons": [
+    { "id": "w1", "name": { "ar": "مطرقة الترميم" }, "desc": { "ar": "ثقيلة وصلبة، تُستعمل في ترميم القطع الحجرية." }, "tags": ["heavy"] },
+    { "id": "w2", "name": { "ar": "الخنجر الأثري" }, "desc": { "ar": "نصل قديم مسنون ما زال حادًّا رغم عمره." }, "tags": ["light"] },
+    { "id": "w3", "name": { "ar": "عمود الحاجز المعدني" }, "desc": { "ar": "عمود حديدي ثقيل يُستعمل لتنظيم صفوف الزوّار." }, "tags": ["heavy"] },
+    { "id": "w4", "name": { "ar": "حبل السياج المخملي" }, "desc": { "ar": "حبل سميك من المخمل يحيط بالقطع الثمينة." }, "tags": ["light"] }
+  ],
+  "clues": [
+    { "type": "attribute", "id": "c1", "text": { "ar": "كل من كان في الحديقة الأثرية يكتب بيده اليسرى." }, "target": "l2", "attr": "hand", "value": "left" },
+    { "type": "attribute", "id": "c2", "text": { "ar": "صاحب مطرقة الترميم له عينان خضراوان." }, "target": "w1", "attr": "eyes", "value": "green" },
+    { "type": "attribute", "id": "c3", "text": { "ar": "كل من كان في قاعة الفسيفساء عيناه خضراوان." }, "target": "l1", "attr": "eyes", "value": "green" },
+    { "type": "not_same", "id": "c4", "text": { "ar": "الدكتورة أميرة لم تكن في مخزن القطع النادرة." }, "a": "s3", "b": "l3" },
+    { "type": "attribute", "id": "c5", "text": { "ar": "صاحب عمود الحاجز المعدني يكتب بيده اليمنى." }, "target": "w3", "attr": "hand", "value": "right" },
+    { "type": "attribute", "id": "c6", "text": { "ar": "صاحب الخنجر الأثري له عينان عسليّتان." }, "target": "w2", "attr": "eyes", "value": "hazel" }
+  ],
+  "murderClue": { "type": "murder", "id": "c7", "text": { "ar": "وُجد على الجثة غبار حجري ملوّن بألوان الفسيفساء." }, "pointsTo": "l1" },
+  "solution": { "murderer": "s2", "location": "l1", "weapon": "w1" }
+}
