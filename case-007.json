@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "id": "case-007",
+  "difficulty": "beginner",
+  "depth": 2,
+  "title": { "ar": "جريمة في محطّة القطار", "en": "Murder at the Train Station" },
+  "intro": {
+    "ar": "عُثر على رئيس المحطّة الحاج رشيد مقتولًا قبل وصول قطار الصباح! اشتبه المحقق بثلاثة أشخاص كانوا في المحطّة، وعليك باستخدام الأدلة تحديد القاتل ومكان الجريمة وسلاح الجريمة.",
+    "en": "Station master Hajj Rachid was found dead before the morning train arrived! The detective suspects three people who were at the station. Use the clues to determine the killer, location, and weapon."
+  },
+  "suspects": [
+    { "id": "s1", "name": { "ar": "المراقب يوسف" }, "desc": { "ar": "مراقب القطارات، ساعته لا تتأخر دقيقة واحدة." }, "facts": { "ar": "أعسر • عيناه بنيّتان" }, "attrs": { "hand": "left", "eyes": "brown" } },
+    { "id": "s2", "name": { "ar": "السيدة فاطمة" }, "desc": { "ar": "مسافرة دائمة تحمل حقيبة لا تفارقها." }, "facts": { "ar": "أيمن • عيناها خضراوان" }, "attrs": { "hand": "right", "eyes": "green" } },
+    { "id": "s3", "name": { "ar": "التاجر الهادي" }, "desc": { "ar": "تاجر أقمشة يسافر بين المدن كل أسبوع." }, "facts": { "ar": "أعسر • عيناه عسليّتان" }, "attrs": { "hand": "left", "eyes": "hazel" } }
+  ],
+  "locations": [
+    { "id": "l1", "name": { "ar": "الرصيف" }, "desc": { "ar": "رصيف طويل تهبّ عليه رياح الصباح الباردة." }, "tags": ["outdoors"] },
+    { "id": "l2", "name": { "ar": "قاعة الانتظار" }, "desc": { "ar": "قاعة مليئة بالمقاعد الخشبية ورائحة القهوة." }, "tags": ["indoors"] },
+    { "id": "l3", "name": { "ar": "مكتب التذاكر" }, "desc": { "ar": "غرفة صغيرة خلف شبّاك زجاجي تملؤها الأختام والأوراق." }, "tags": ["indoors"] }
+  ],
+  "weapons": [
+    { "id": "w1", "name": { "ar": "الحقيبة المعدنية" }, "desc": { "ar": "حقيبة سفر ثقيلة ذات زوايا حديدية." }, "tags": ["heavy"] },
+    { "id": "w2", "name": { "ar": "مقصّ التذاكر" }, "desc": { "ar": "مقصّ صغير حادّ يثقب الورق ويقطعه." }, "tags": ["light"] },
+    { "id": "w3", "name": { "ar": "حبل الأمتعة" }, "desc": { "ar": "حبل متين يُستعمل لربط الصناديق على العربات." }, "tags": ["light"] }
+  ],
+  "clues": [
+    { "type": "attribute", "id": "c1", "text": { "ar": "صاحب مقصّ التذاكر يكتب بيده اليسرى." }, "target": "w2", "attr": "hand", "value": "left" },
+    { "type": "not_same", "id": "c2", "text": { "ar": "التاجر الهادي لم يكن في مكتب التذاكر." }, "a": "s3", "b": "l3" },
+    { "type": "attribute", "id": "c3", "text": { "ar": "كل من كان في الرصيف يكتب بيده اليمنى." }, "target": "l1", "attr": "hand", "value": "right" },
+    { "type": "attribute", "id": "c4", "text": { "ar": "صاحب حبل الأمتعة له عينان بنيّتان." }, "target": "w3", "attr": "eyes", "value": "brown" }
+  ],
+  "murderClue": { "type": "murder", "id": "c5", "text": { "ar": "وُجدت الجثة بين أكوام من التذاكر المختومة المبعثرة." }, "pointsTo": "l3" },
+  "solution": { "murderer": "s1", "location": "l3", "weapon": "w3" }
+}
